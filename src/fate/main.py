@@ -1,7 +1,9 @@
 import argparse
 import os
+import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import git
@@ -11,6 +13,17 @@ import tomlkit.items
 from fate.color import _c
 from fate.git_utils import find_git_root, has_upstream, print_repo_status
 from fate.run import _iter_repos, find_faterc, run_repo
+
+
+def _parse_duration(s: str) -> float:
+    """Parse a duration string like '500ms', '1s', '2m', '1h' into seconds."""
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)(ms|s|m|h)", s)
+    if not m:
+        raise argparse.ArgumentTypeError(
+            f"invalid duration {s!r}: expected a number followed by ms, s, m, or h"
+        )
+    value, unit = float(m.group(1)), m.group(2)
+    return value * {"ms": 0.001, "s": 1, "m": 60, "h": 3600}[unit]
 
 
 def cmd_run(args: argparse.Namespace) -> None:
@@ -39,7 +52,9 @@ def cmd_gamble(args: argparse.Namespace) -> None:
     print("=================================")
 
     prek_rev_cache: dict[str, str] = {}
-    for repo_root in repos:
+    for i, repo_root in enumerate(repos):
+        if i > 0 and args.throttle:
+            time.sleep(args.throttle)
         print()
         if not print_repo_status(repo_root):
             continue
@@ -59,7 +74,9 @@ def cmd_list(args: argparse.Namespace) -> None:
     print(_c("1;32", "✨💖 Don't think, just pull! 🎰🪙"))
     print("=================================")
 
-    for repo_root in repos:
+    for i, repo_root in enumerate(repos):
+        if i > 0 and args.throttle:
+            time.sleep(args.throttle)
         if args.fetch:
             subprocess.run(["git", "fetch", "--quiet"], cwd=repo_root, check=False)
         print_repo_status(repo_root)
@@ -136,12 +153,26 @@ def main() -> None:
         "gamble", aliases=["g"], help="run fate on all repos under a directory"
     )
     p_gamble.add_argument("directory", nargs="?", default=None)
+    p_gamble.add_argument(
+        "--throttle",
+        type=_parse_duration,
+        default=0.0,
+        metavar="DURATION",
+        help="delay between repos (e.g. 1s, 500ms, 2m)",
+    )
     p_gamble.set_defaults(func=cmd_gamble)
 
     p_list = sub.add_parser(
         "list", aliases=["l", "ls"], help="show repo statuses without running"
     )
     p_list.add_argument("directory", nargs="?", default=None)
+    p_list.add_argument(
+        "--throttle",
+        type=_parse_duration,
+        default=0.0,
+        metavar="DURATION",
+        help="delay between repos (e.g. 1s, 500ms, 2m)",
+    )
     p_list.add_argument(
         "--no-fetch",
         dest="fetch",
