@@ -7,7 +7,7 @@ name = "fate-casino"
 version = "0.1.0"
 description = "✨💖 Don't think, just pull! 🎰🪙"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 authors = [{ name = "Evan Chen", email = "evan@evanchen.cc" }]
 license = { text = "MIT" }
 urls = { repository = "https://github.com/vEnhance/fate-casino" }
