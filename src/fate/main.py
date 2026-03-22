@@ -8,7 +8,8 @@ import git
 import tomlkit
 import tomlkit.items
 
-from fate.git_utils import _c, find_git_root, has_upstream, print_repo_status
+from fate.color import _c
+from fate.git_utils import find_git_root, has_upstream, print_repo_status
 from fate.run import _iter_repos, find_faterc, run_repo
 
 

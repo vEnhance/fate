@@ -1,13 +1,8 @@
-import sys
 from pathlib import Path
 
 import git
 
-
-def _c(code: str, text: str) -> str:
-    if not sys.stdout.isatty():
-        return text
-    return f"\033[{code}m{text}\033[0m"
+from fate.color import _c
 
 
 def find_git_root(path: Path) -> Path | None:
