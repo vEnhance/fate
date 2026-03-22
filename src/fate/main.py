@@ -10,7 +10,7 @@ import git
 import tomlkit
 import tomlkit.items
 
-from fate.color import _c
+from fate.color import colorize
 from fate.git_utils import find_git_root, has_upstream, print_repo_status
 from fate.run import _iter_repos, find_faterc, run_repo
 
@@ -48,7 +48,7 @@ def cmd_gamble(args: argparse.Namespace) -> None:
         print(f"no .faterc or faterc files found in {target}")
         return
 
-    print(_c("1;32", "✨💖 Don't think, just pull! 🎰🪙"))
+    print(colorize("1;32", "✨💖 Don't think, just pull! 🎰🪙"))
     print("=================================")
 
     prek_rev_cache: dict[str, str] = {}
@@ -71,7 +71,7 @@ def cmd_list(args: argparse.Namespace) -> None:
         print(f"no .faterc or faterc files found in {target}")
         return
 
-    print(_c("1;32", "✨💖 Don't think, just pull! 🎰🪙"))
+    print(colorize("1;32", "✨💖 Don't think, just pull! 🎰🪙"))
     print("=================================")
 
     for i, repo_root in enumerate(repos):

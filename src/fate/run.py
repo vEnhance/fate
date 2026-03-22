@@ -7,7 +7,7 @@ from pathlib import Path
 
 import git
 
-from fate.color import _c
+from fate.color import colorize
 from fate.git_utils import current_branch, is_dirty
 from fate.prek import _prek_revs, prek_up_to_date, prek_update_cache
 
@@ -41,7 +41,7 @@ def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> No
     repo = git.Repo(git_root)
 
     if is_dirty(repo):
-        print(_c("1;33", f"Skipping {git_root}: working directory is dirty"))
+        print(colorize("1;33", f"Skipping {git_root}: working directory is dirty"))
         return
 
     faterc_path = find_faterc(git_root)
@@ -82,7 +82,7 @@ def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> No
             if prek_rev_cache is not None and prek_up_to_date(
                 prek_toml, prek_rev_cache
             ):
-                print(_c("32", "prek: all hooks up-to-date (cached)"))
+                print(colorize("32", "prek: all hooks up-to-date (cached)"))
             else:
                 before = _prek_revs(prek_toml)
                 subprocess.run(
@@ -99,13 +99,13 @@ def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> No
                 if updated:
                     for url in sorted(updated):
                         print(
-                            _c(
+                            colorize(
                                 "1;32",
                                 f"prek: {url}: {before.get(url)} -> {after[url]}",
                             )
                         )
                 else:
-                    print(_c("32", "prek: all hooks up-to-date"))
+                    print(colorize("32", "prek: all hooks up-to-date"))
             if prek_cfg.get("commit", True) and is_dirty(repo):
                 subprocess.run(
                     ["git", "commit", "-am", "ci: prek auto-update"],

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import git
 
-from fate.color import _c
+from fate.color import colorize
 
 
 def find_git_root(path: Path) -> Path | None:
@@ -37,7 +37,7 @@ def print_repo_status(repo_root: Path) -> bool:
     """Print a status line for repo_root. Returns False if no remote (caller should skip)."""
     repo = git.Repo(repo_root)
     branch = current_branch(repo)
-    name = _c("1;34", repo_root.name)
+    name = colorize("1;34", repo_root.name)
 
     if not repo.remotes:
         print(f"{name} (no remote, skipping)")
@@ -55,16 +55,16 @@ def print_repo_status(repo_root: Path) -> bool:
 
     parts = []
     if ahead:
-        parts.append(_c("36", f"↑{ahead}"))
+        parts.append(colorize("36", f"↑{ahead}"))
     if behind:
-        parts.append(_c("36", f"↓{behind}"))
+        parts.append(colorize("36", f"↓{behind}"))
     if staged:
-        parts.append(_c("32", f"●{staged}"))
+        parts.append(colorize("32", f"●{staged}"))
     if dirty:
-        parts.append(_c("31", f"✚{dirty}"))
+        parts.append(colorize("31", f"✚{dirty}"))
     if untracked:
-        parts.append(_c("34", f"…{untracked}"))
+        parts.append(colorize("34", f"…{untracked}"))
 
     status = (" " + " ".join(parts)) if parts else ""
-    print(f"{name} {_c('33', f'({branch})')}{status}")
+    print(f"{name} {colorize('33', f'({branch})')}{status}")
     return True
