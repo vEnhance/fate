@@ -40,7 +40,7 @@ def print_repo_status(repo_root: Path) -> bool:
     name = colorize("1;34", repo_root.name)
 
     if not repo.remotes:
-        print(f"{name} (no remote, skipping)")
+        print(f"{name} (no remote)")
         return False
 
     try:
