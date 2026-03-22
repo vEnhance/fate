@@ -145,23 +145,14 @@ def main() -> None:
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_run = sub.add_parser("run", aliases=["r"], help="run fate on a repository")
-    p_run.add_argument("directory", nargs="?", default=None)
-    p_run.set_defaults(func=cmd_run)
-
-    p_gamble = sub.add_parser(
-        "gamble", aliases=["g"], help="run fate on all repos under a directory"
+    p_init = sub.add_parser("init", aliases=["i"], help="initialize .faterc")
+    p_init.add_argument(
+        "--visible",
+        action="store_true",
+        default=False,
+        help="create faterc instead of .faterc",
     )
-    p_gamble.add_argument("directory", nargs="?", default=None)
-    p_gamble.add_argument(
-        "-t",
-        "--throttle",
-        type=_parse_duration,
-        default=0.0,
-        metavar="DURATION",
-        help="delay between repos (e.g. 1s, 500ms, 2m)",
-    )
-    p_gamble.set_defaults(func=cmd_gamble)
+    p_init.set_defaults(func=cmd_init)
 
     p_list = sub.add_parser(
         "list", aliases=["l", "ls"], help="show repo statuses without running"
@@ -184,15 +175,23 @@ def main() -> None:
     )
     p_list.set_defaults(func=cmd_list)
 
-    p_init = sub.add_parser("init", aliases=["i"], help="initialize .faterc")
-    p_init.add_argument(
-        "--visible",
-        action="store_true",
-        default=False,
-        help="create faterc instead of .faterc",
-    )
-    p_init.set_defaults(func=cmd_init)
+    p_run = sub.add_parser("run", aliases=["r"], help="run fate on a repository")
+    p_run.add_argument("directory", nargs="?", default=None)
+    p_run.set_defaults(func=cmd_run)
 
+    p_gamble = sub.add_parser(
+        "gamble", aliases=["g"], help="run fate on all repos under a directory"
+    )
+    p_gamble.add_argument("directory", nargs="?", default=None)
+    p_gamble.add_argument(
+        "-t",
+        "--throttle",
+        type=_parse_duration,
+        default=0.0,
+        metavar="DURATION",
+        help="delay between repos (e.g. 1s, 500ms, 2m)",
+    )
+    p_gamble.set_defaults(func=cmd_gamble)
     args = parser.parse_args()
     args.func(args)
 
