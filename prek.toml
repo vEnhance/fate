@@ -103,12 +103,12 @@ hooks = [
     language = "system",
     types = ["python"]
   },
-  # {
-  #   id = "pytest",
-  #   name = "pytest",
-  #   entry = "uv run pytest",
-  #   pass_filenames = false,
-  #   language = "system",
-  #   stages = ["pre-push"],
-  # }
+  {
+    id = "pytest",
+    name = "pytest",
+    entry = "uv run pytest",
+    pass_filenames = false,
+    language = "system",
+    stages = ["pre-push"],
+  }
 ]
