@@ -69,7 +69,7 @@ def cmd_list(args: argparse.Namespace) -> None:
     for i, repo_root in enumerate(repos):
         if args.fetch and i > 0 and args.throttle:
             time.sleep(args.throttle)
-        subprocess.run(["git", "fetch", "--quiet"], cwd=repo_root, check=False)
+            subprocess.run(["git", "fetch", "--quiet"], cwd=repo_root, check=False)
         print_repo_status(repo_root)
 
 
