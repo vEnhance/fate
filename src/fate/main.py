@@ -75,9 +75,9 @@ def cmd_list(args: argparse.Namespace) -> None:
     print("=================================")
 
     for i, repo_root in enumerate(repos):
-        if i > 0 and args.throttle:
-            time.sleep(args.throttle)
         if args.fetch:
+            if i > 0 and args.throttle:
+                time.sleep(args.throttle)
             subprocess.run(["git", "fetch", "--quiet"], cwd=repo_root, check=False)
         print_repo_status(repo_root)
 
@@ -174,11 +174,10 @@ def main() -> None:
         help="delay between repos (e.g. 1s, 500ms, 2m)",
     )
     p_list.add_argument(
-        "--no-fetch",
-        dest="fetch",
-        action="store_false",
-        default=True,
-        help="skip git fetch before showing status",
+        "--fetch",
+        action="store_true",
+        default=False,
+        help="run git fetch before showing status",
     )
     p_list.set_defaults(func=cmd_list)
 
