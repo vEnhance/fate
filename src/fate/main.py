@@ -137,7 +137,7 @@ def main() -> None:
     p_gamble.set_defaults(func=cmd_gamble)
 
     p_list = sub.add_parser(
-        "list", aliases=["l"], help="show repo statuses without running"
+        "list", aliases=["l", "ls"], help="show repo statuses without running"
     )
     p_list.add_argument("directory", nargs="?", default=None)
     p_list.set_defaults(func=cmd_list)
