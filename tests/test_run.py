@@ -19,7 +19,7 @@ def test_find_faterc_both_prefers_visible(tmp_path, capsys):
     (tmp_path / ".faterc").write_text("")
     (tmp_path / "faterc").write_text("")
     assert find_faterc(tmp_path) == tmp_path / "faterc"
-    assert "warning" in capsys.readouterr().err
+    assert "Warning" in capsys.readouterr().err
 
 
 def test_find_faterc_none(tmp_path):
