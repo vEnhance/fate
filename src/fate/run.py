@@ -134,9 +134,10 @@ def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> No
 
 
 def _find_faterc_files(target: Path) -> list[Path]:
-    if shutil.which("fd") is not None:
+    fd = shutil.which("fdfind") or shutil.which("fd")
+    if fd is not None:
         result = subprocess.run(
-            ["fd", "--unrestricted", "--type", "f", r"^\.?faterc$", str(target)],
+            [fd, "--unrestricted", "--type", "f", r"^\.?faterc$", str(target)],
             capture_output=True,
             text=True,
         )
