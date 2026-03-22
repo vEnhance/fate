@@ -2,196 +2,14 @@ import argparse
 import os
 import subprocess
 import sys
-import tomllib
 from pathlib import Path
 
 import git
-import tomli
 import tomlkit
 import tomlkit.items
 
-
-def _c(code: str, text: str) -> str:
-    if not sys.stdout.isatty():
-        return text
-    return f"\033[{code}m{text}\033[0m"
-
-
-def find_git_root(path: Path) -> Path | None:
-    try:
-        repo = git.Repo(path, search_parent_directories=True)
-        assert repo.working_tree_dir is not None
-        return Path(repo.working_tree_dir)
-    except git.InvalidGitRepositoryError:
-        return None
-
-
-def is_dirty(repo: git.Repo) -> bool:
-    return repo.is_dirty(untracked_files=False)
-
-
-def current_branch(repo: git.Repo) -> str:
-    try:
-        return repo.active_branch.name
-    except TypeError:
-        return ""  # detached HEAD
-
-
-def has_upstream(repo: git.Repo) -> bool:
-    try:
-        repo.git.rev_parse("--abbrev-ref", "@{u}")
-        return True
-    except git.GitCommandError:
-        return False
-
-
-def print_repo_status(repo_root: Path) -> bool:
-    """Print a status line for repo_root. Returns False if no remote (caller should skip)."""
-    repo = git.Repo(repo_root)
-    branch = current_branch(repo)
-    name = _c("1;34", repo_root.name)
-
-    if not repo.remotes:
-        print(f"\n{name} (no remote, skipping)")
-        return False
-
-    try:
-        ahead = int(repo.git.rev_list("--count", "@{u}..HEAD"))
-        behind = int(repo.git.rev_list("--count", "HEAD..@{u}"))
-    except git.GitCommandError:
-        ahead = behind = 0
-
-    staged = len(repo.index.diff("HEAD"))
-    dirty = len(repo.index.diff(None))
-    untracked = len(repo.untracked_files)
-
-    parts = []
-    if ahead:
-        parts.append(_c("36", f"↑{ahead}"))
-    if behind:
-        parts.append(_c("36", f"↓{behind}"))
-    if staged:
-        parts.append(_c("32", f"●{staged}"))
-    if dirty:
-        parts.append(_c("31", f"✚{dirty}"))
-    if untracked:
-        parts.append(_c("34", f"…{untracked}"))
-
-    status = (" " + " ".join(parts)) if parts else ""
-    print(f"\n{name} {_c('33', f'({branch})')}{status}")
-    return True
-
-
-def _prek_revs(prek_toml: Path) -> dict[str, str]:
-    """Return {repo_url: rev} for all versioned repos in prek.toml."""
-    with open(prek_toml, "rb") as f:
-        data = tomli.load(f)
-    return {e["repo"]: e["rev"] for e in data.get("repos", []) if "rev" in e}
-
-
-def _prek_up_to_date(prek_toml: Path, cache: dict[str, str]) -> bool:
-    """True if every versioned hook in prek_toml is already at the cached latest rev."""
-    revs = _prek_revs(prek_toml)
-    return bool(revs) and all(cache.get(url) == rev for url, rev in revs.items())
-
-
-def find_faterc(directory: Path) -> Path | None:
-    dotfile = directory / ".faterc"
-    visible = directory / "faterc"
-    if dotfile.exists() and visible.exists():
-        print(
-            f"warning: both .faterc and faterc exist in {directory}, using faterc",
-            file=sys.stderr,
-        )
-        return visible
-    for p in (dotfile, visible):
-        if p.exists():
-            return p
-    return None
-
-
-def venv_env(venv: str, repo_root: Path) -> dict[str, str]:
-    venv_path = Path(venv).expanduser()
-    if not venv_path.is_absolute():
-        venv_path = repo_root / venv_path
-    env = os.environ.copy()
-    env["PATH"] = str(venv_path / "bin") + os.pathsep + env.get("PATH", "")
-    env["UV_PROJECT_ENVIRONMENT"] = str(venv_path)
-    return env
-
-
-def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> None:
-    repo = git.Repo(git_root)
-
-    if is_dirty(repo):
-        print(f"Skipping {git_root}: working directory is dirty")
-        return
-
-    faterc_path = find_faterc(git_root)
-    assert faterc_path is not None
-    with open(faterc_path, "rb") as f:
-        faterc = tomllib.load(f)
-
-    config = faterc.get("config", {})
-    actions = faterc.get("actions", {})
-    branch = config.get("branch", "main")
-    venv = config.get("venv")
-    env = venv_env(venv, git_root) if venv else os.environ.copy()
-
-    orig = current_branch(repo)
-    if orig != branch:
-        subprocess.run(["git", "checkout", branch], cwd=git_root, check=True)
-
-    try:
-        if actions.get("pull", {}).get("enabled", False):
-            subprocess.run(["git", "pull"], cwd=git_root, check=True)
-
-        uv_cfg = actions.get("uv", {})
-        if uv_cfg.get("enabled", False):
-            if not venv:
-                raise ValueError("uv action requires venv to be set in [config]")
-            subprocess.run(["uv", "sync", "-U"], cwd=git_root, env=env, check=True)
-            if uv_cfg.get("commit", True) and is_dirty(repo):
-                subprocess.run(
-                    ["git", "commit", "-am", "chore(deps): uv sync -U"],
-                    cwd=git_root,
-                    env=env,
-                    check=True,
-                )
-
-        prek_cfg = actions.get("prek", {})
-        if prek_cfg.get("enabled", False):
-            prek_toml = git_root / "prek.toml"
-            if prek_rev_cache is None or not _prek_up_to_date(
-                prek_toml, prek_rev_cache
-            ):
-                subprocess.run(
-                    ["prek", "auto-update"], cwd=git_root, env=env, check=True
-                )
-                if prek_rev_cache is not None:
-                    prek_rev_cache.update(_prek_revs(prek_toml))
-            if prek_cfg.get("commit", True) and is_dirty(repo):
-                subprocess.run(
-                    ["git", "commit", "-am", "ci: prek auto-update"],
-                    cwd=git_root,
-                    env=env,
-                    check=True,
-                )
-
-        push_cfg = actions.get("push", {})
-        if push_cfg.get("enabled", False):
-            try:
-                ahead = int(repo.git.rev_list("--count", "@{u}..HEAD"))
-            except git.GitCommandError:
-                ahead = 0
-            if ahead:
-                push_args = ["git", "push"]
-                if not push_cfg.get("verify", True):
-                    push_args.append("--no-verify")
-                subprocess.run(push_args, cwd=git_root, env=env, check=True)
-    finally:
-        if orig and orig != branch:
-            subprocess.run(["git", "checkout", orig], cwd=git_root, check=True)
+from fate.git_utils import _c, find_git_root, has_upstream, print_repo_status
+from fate.run import _iter_repos, find_faterc, run_repo
 
 
 def cmd_run(args: argparse.Namespace) -> None:
@@ -207,19 +25,6 @@ def cmd_run(args: argparse.Namespace) -> None:
         sys.exit(1)
 
     run_repo(git_root)
-
-
-def _iter_repos(target: Path) -> list[Path]:
-    seen: set[Path] = set()
-    repos = []
-    for faterc in sorted(
-        [*target.rglob(".faterc"), *target.rglob("faterc")],
-        key=lambda p: p.parent,
-    ):
-        if faterc.parent not in seen:
-            seen.add(faterc.parent)
-            repos.append(faterc.parent)
-    return repos
 
 
 def cmd_gamble(args: argparse.Namespace) -> None:
