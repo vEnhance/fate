@@ -39,6 +39,7 @@ def cmd_gamble(args: argparse.Namespace) -> None:
 
     prek_rev_cache: dict[str, str] = {}
     for repo_root in repos:
+        print()
         if not print_repo_status(repo_root):
             continue
         try:

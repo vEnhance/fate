@@ -45,7 +45,7 @@ def print_repo_status(repo_root: Path) -> bool:
     name = _c("1;34", repo_root.name)
 
     if not repo.remotes:
-        print(f"\n{name} (no remote, skipping)")
+        print(f"{name} (no remote, skipping)")
         return False
 
     try:
@@ -71,5 +71,5 @@ def print_repo_status(repo_root: Path) -> bool:
         parts.append(_c("34", f"…{untracked}"))
 
     status = (" " + " ".join(parts)) if parts else ""
-    print(f"\n{name} {_c('33', f'({branch})')}{status}")
+    print(f"{name} {_c('33', f'({branch})')}{status}")
     return True
