@@ -10,9 +10,8 @@ import git
 import tomlkit
 import tomlkit.items
 
-from fate.color import colorize
 from fate.git_utils import find_git_root, has_upstream, print_repo_status
-from fate.run import _iter_repos, find_faterc, run_repo
+from fate.run import find_faterc, iter_repos, run_repo
 
 
 def _parse_duration(s: str) -> float:
@@ -20,7 +19,7 @@ def _parse_duration(s: str) -> float:
     m = re.fullmatch(r"(\d+(?:\.\d+)?)(ms|s|m|h)", s)
     if not m:
         raise argparse.ArgumentTypeError(
-            f"invalid duration {s!r}: expected a number followed by ms, s, m, or h"
+            f"Invalid duration {s!r}: Expected a number followed by ms, s, m, or h"
         )
     value, unit = float(m.group(1)), m.group(2)
     return value * {"ms": 0.001, "s": 1, "m": 60, "h": 3600}[unit]
@@ -31,11 +30,11 @@ def cmd_run(args: argparse.Namespace) -> None:
 
     git_root = find_git_root(target)
     if git_root is None:
-        print(f"error: {target} is not in a git repository", file=sys.stderr)
+        print(f"Error: {target} is not in a git repository", file=sys.stderr)
         sys.exit(1)
 
     if find_faterc(git_root) is None:
-        print(f"error: no .faterc or faterc found in {git_root}", file=sys.stderr)
+        print(f"Error: No .faterc or faterc found in {git_root}", file=sys.stderr)
         sys.exit(1)
 
     run_repo(git_root)
@@ -43,13 +42,10 @@ def cmd_run(args: argparse.Namespace) -> None:
 
 def cmd_gamble(args: argparse.Namespace) -> None:
     target = Path(args.directory).resolve() if args.directory else Path.cwd()
-    repos = _iter_repos(target)
+    repos = iter_repos(target)
     if not repos:
-        print(f"no .faterc or faterc files found in {target}")
+        print(f"No .faterc or faterc files found in {target}")
         return
-
-    print(colorize("1;32", "✨💖 Don't think, just pull! 🎰🪙"))
-    print("=================================")
 
     prek_rev_cache: dict[str, str] = {}
     for i, repo_root in enumerate(repos):
@@ -61,24 +57,19 @@ def cmd_gamble(args: argparse.Namespace) -> None:
         try:
             run_repo(repo_root, prek_rev_cache=prek_rev_cache)
         except (subprocess.CalledProcessError, git.GitCommandError) as e:
-            print(f"error: {e}", file=sys.stderr)
+            print(f"Error: {e}", file=sys.stderr)
 
 
 def cmd_list(args: argparse.Namespace) -> None:
     target = Path(args.directory).resolve() if args.directory else Path.cwd()
-    repos = _iter_repos(target)
+    repos = iter_repos(target)
     if not repos:
-        print(f"no .faterc or faterc files found in {target}")
+        print(f"No .faterc or faterc files found in {target}")
         return
-
-    print(colorize("1;32", "✨💖 Don't think, just pull! 🎰🪙"))
-    print("=================================")
-
     for i, repo_root in enumerate(repos):
-        if args.fetch:
-            if i > 0 and args.throttle:
-                time.sleep(args.throttle)
-            subprocess.run(["git", "fetch", "--quiet"], cwd=repo_root, check=False)
+        if args.fetch and i > 0 and args.throttle:
+            time.sleep(args.throttle)
+        subprocess.run(["git", "fetch", "--quiet"], cwd=repo_root, check=False)
         print_repo_status(repo_root)
 
 
@@ -86,11 +77,11 @@ def cmd_init(args: argparse.Namespace) -> None:
     cwd = Path.cwd()
 
     if not (cwd / ".git").exists():
-        print("error: not at the root of a git repository", file=sys.stderr)
+        print("Error: not at the root of a git repository", file=sys.stderr)
         sys.exit(1)
 
     if find_faterc(cwd) is not None:
-        print("error: .faterc or faterc already exists", file=sys.stderr)
+        print("Error: .faterc or faterc already exists", file=sys.stderr)
         sys.exit(1)
     faterc = cwd / ("faterc" if args.visible else ".faterc")
 
@@ -141,11 +132,15 @@ def cmd_init(args: argparse.Namespace) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        prog="fate", description="Automate git repo maintenance"
+        prog="fate",
+        description="✨💖 Don't think, just pull! 🎰🪙",
+        epilog="Named after the Fate's Thread Casino from Mystery Hunt 2026.",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_init = sub.add_parser("init", aliases=["i"], help="initialize .faterc")
+    p_init = sub.add_parser(
+        "init", aliases=["i"], help="Initialize .faterc in the current directory."
+    )
     p_init.add_argument(
         "--visible",
         action="store_true",
@@ -155,7 +150,7 @@ def main() -> None:
     p_init.set_defaults(func=cmd_init)
 
     p_list = sub.add_parser(
-        "list", aliases=["l", "ls"], help="show repo statuses without running"
+        "list", aliases=["l", "ls"], help="Show repo statuses without running."
     )
     p_list.add_argument("directory", nargs="?", default=None)
     p_list.add_argument(
@@ -164,23 +159,25 @@ def main() -> None:
         type=_parse_duration,
         default=0.0,
         metavar="DURATION",
-        help="delay between repos (e.g. 1s, 500ms, 2m)",
+        help="Delay between repos (e.g. 1s, 500ms, 2m)",
     )
     p_list.add_argument(
         "-f",
         "--fetch",
         action="store_true",
         default=False,
-        help="run git fetch before showing status",
+        help="Run git fetch before showing status",
     )
     p_list.set_defaults(func=cmd_list)
 
-    p_run = sub.add_parser("run", aliases=["r"], help="run fate on a repository")
+    p_run = sub.add_parser(
+        "run", aliases=["r"], help="Run fate on a single repository."
+    )
     p_run.add_argument("directory", nargs="?", default=None)
     p_run.set_defaults(func=cmd_run)
 
     p_gamble = sub.add_parser(
-        "gamble", aliases=["g"], help="run fate on all repos under a directory"
+        "gamble", aliases=["g"], help="Run fate on all repositories."
     )
     p_gamble.add_argument("directory", nargs="?", default=None)
     p_gamble.add_argument(

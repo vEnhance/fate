@@ -1,6 +1,6 @@
 import pytest
 
-from fate.run import _find_faterc_files, _iter_repos, find_faterc, venv_env
+from fate.run import _find_faterc_files, find_faterc, iter_repos, venv_env
 
 # --- find_faterc ---
 
@@ -53,7 +53,7 @@ def test_venv_env_prepends_path(tmp_path):
     assert env["PATH"].startswith(str(tmp_path / "bin"))
 
 
-# --- _find_faterc_files / _iter_repos (forcing os.walk path) ---
+# --- _find_faterc_files / iter_repos (forcing os.walk path) ---
 
 
 @pytest.fixture(autouse=True)
@@ -94,18 +94,18 @@ def test_find_faterc_files_nested(tmp_path):
     assert tmp_path / "b" / "faterc" in files
 
 
-def test_iter_repos_deduplicates(tmp_path):
+def testiter_repos_deduplicates(tmp_path):
     (tmp_path / ".faterc").write_text("")
     (tmp_path / "faterc").write_text("")
-    repos = _iter_repos(tmp_path)
+    repos = iter_repos(tmp_path)
     assert repos.count(tmp_path) == 1
 
 
-def test_iter_repos_multiple(tmp_path):
+def testiter_repos_multiple(tmp_path):
     for name in ("a", "b", "c"):
         d = tmp_path / name
         d.mkdir()
         (d / ".faterc").write_text("")
-    repos = _iter_repos(tmp_path)
+    repos = iter_repos(tmp_path)
     assert len(repos) == 3
     assert tmp_path / "a" in repos

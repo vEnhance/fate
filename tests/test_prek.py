@@ -1,6 +1,6 @@
 import pytest
 
-from fate.prek import _prek_revs, prek_up_to_date, prek_update_cache
+from fate.prek import prek_revs, prek_up_to_date, prek_update_cache
 
 SAMPLE = """\
 [[repos]]
@@ -43,23 +43,23 @@ def prek_toml(tmp_path):
     return p
 
 
-def test_prek_revs(prek_toml):
-    assert _prek_revs(prek_toml) == {
+def testprek_revs(prek_toml):
+    assert prek_revs(prek_toml) == {
         "https://github.com/astral-sh/ruff-pre-commit": "v0.15.7",
         "https://github.com/codespell-project/codespell": "v2.4.2",
     }
 
 
-def test_prek_revs_ignores_builtin_and_local(prek_toml):
-    revs = _prek_revs(prek_toml)
+def testprek_revs_ignores_builtin_and_local(prek_toml):
+    revs = prek_revs(prek_toml)
     assert "builtin" not in revs
     assert "local" not in revs
 
 
-def test_prek_revs_multiline_inline_tables(tmp_path):
+def testprek_revs_multiline_inline_tables(tmp_path):
     p = tmp_path / "prek.toml"
     p.write_text(MULTILINE)
-    assert _prek_revs(p) == {
+    assert prek_revs(p) == {
         "https://github.com/astral-sh/ruff-pre-commit": "v0.15.7",
     }
 

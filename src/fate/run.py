@@ -9,7 +9,7 @@ import git
 
 from fate.color import colorize
 from fate.git_utils import current_branch, is_dirty
-from fate.prek import _prek_revs, prek_up_to_date, prek_update_cache
+from fate.prek import prek_revs, prek_up_to_date, prek_update_cache
 
 
 def find_faterc(directory: Path) -> Path | None:
@@ -17,7 +17,10 @@ def find_faterc(directory: Path) -> Path | None:
     visible = directory / "faterc"
     if dotfile.exists() and visible.exists():
         print(
-            f"warning: both .faterc and faterc exist in {directory}, using faterc",
+            colorize(
+                "1;31",
+                f"Warning: Both .faterc and faterc exist in {directory}, using faterc",
+            ),
             file=sys.stderr,
         )
         return visible
@@ -41,7 +44,7 @@ def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> No
     repo = git.Repo(git_root)
 
     if is_dirty(repo):
-        print(colorize("1;33", f"Skipping {git_root}: working directory is dirty"))
+        print(colorize("1;33", f"Skipping {git_root}: Working directory is dirty"))
         return
 
     faterc_path = find_faterc(git_root)
@@ -84,7 +87,7 @@ def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> No
             ):
                 print(colorize("32", "prek: all hooks up-to-date (cached)"))
             else:
-                before = _prek_revs(prek_toml)
+                before = prek_revs(prek_toml)
                 subprocess.run(
                     ["prek", "auto-update"],
                     cwd=git_root,
@@ -92,7 +95,7 @@ def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> No
                     check=True,
                     capture_output=True,
                 )
-                after = _prek_revs(prek_toml)
+                after = prek_revs(prek_toml)
                 if prek_rev_cache is not None:
                     prek_update_cache(prek_toml, prek_rev_cache)
                 updated = {url for url, rev in after.items() if before.get(url) != rev}
@@ -146,7 +149,7 @@ def _find_faterc_files(target: Path) -> list[Path]:
     return sorted(files)
 
 
-def _iter_repos(target: Path) -> list[Path]:
+def iter_repos(target: Path) -> list[Path]:
     seen: set[Path] = set()
     repos = []
     for faterc in _find_faterc_files(target):
