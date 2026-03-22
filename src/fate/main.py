@@ -60,6 +60,8 @@ def cmd_list(args: argparse.Namespace) -> None:
     print("=================================")
 
     for repo_root in repos:
+        if args.fetch:
+            subprocess.run(["git", "fetch", "--quiet"], cwd=repo_root, check=False)
         print_repo_status(repo_root)
 
 
@@ -140,6 +142,13 @@ def main() -> None:
         "list", aliases=["l", "ls"], help="show repo statuses without running"
     )
     p_list.add_argument("directory", nargs="?", default=None)
+    p_list.add_argument(
+        "--no-fetch",
+        dest="fetch",
+        action="store_false",
+        default=True,
+        help="skip git fetch before showing status",
+    )
     p_list.set_defaults(func=cmd_list)
 
     p_init = sub.add_parser("init", aliases=["i"], help="initialize .faterc")
