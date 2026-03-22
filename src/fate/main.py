@@ -133,8 +133,8 @@ def cmd_init(args: argparse.Namespace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="fate",
-        description="✨💖 Don't think, just pull! 🎰🪙",
-        epilog="Named after the Fate's Thread Casino from Mystery Hunt 2026.",
+        description="Runs git pull and other commands recursively on your git repositories.",
+        epilog="✨💖 Don't ask, just pull! 🎰🪙",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

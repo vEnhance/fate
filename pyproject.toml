@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "fate-casino"
 version = "0.1.0"
-description = "✨💖 Don't think, just pull! 🎰🪙"
+description = "✨💖 Don't ask, just pull! 🎰🪙"
 readme = "README.md"
 requires-python = ">=3.13"
 authors = [{ name = "Evan Chen", email = "evan@evanchen.cc" }]
