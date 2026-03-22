@@ -41,7 +41,7 @@ def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> No
     repo = git.Repo(git_root)
 
     if is_dirty(repo):
-        print(f"Skipping {git_root}: working directory is dirty")
+        print(_c("1;33", f"Skipping {git_root}: working directory is dirty"))
         return
 
     faterc_path = find_faterc(git_root)
@@ -99,7 +99,10 @@ def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> No
                 if updated:
                     for url in sorted(updated):
                         print(
-                            _c("32", f"prek: {url}: {before.get(url)} -> {after[url]}")
+                            _c(
+                                "1;32",
+                                f"prek: {url}: {before.get(url)} -> {after[url]}",
+                            )
                         )
                 else:
                     print(_c("32", "prek: all hooks up-to-date"))
