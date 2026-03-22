@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -107,13 +108,26 @@ def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> No
             subprocess.run(["git", "checkout", orig], cwd=git_root, check=True)
 
 
+def _find_faterc_files(target: Path) -> list[Path]:
+    if shutil.which("fd") is not None:
+        result = subprocess.run(
+            ["fd", "--unrestricted", "--type", "f", r"^\.?faterc$", str(target)],
+            capture_output=True,
+            text=True,
+        )
+        return sorted(Path(p) for p in result.stdout.splitlines() if p)
+    files = []
+    for dirpath, _, filenames in os.walk(target):
+        for name in (".faterc", "faterc"):
+            if name in filenames:
+                files.append(Path(dirpath) / name)
+    return sorted(files)
+
+
 def _iter_repos(target: Path) -> list[Path]:
     seen: set[Path] = set()
     repos = []
-    for faterc in sorted(
-        [*target.rglob(".faterc"), *target.rglob("faterc")],
-        key=lambda p: p.parent,
-    ):
+    for faterc in _find_faterc_files(target):
         if faterc.parent not in seen:
             seen.add(faterc.parent)
             repos.append(faterc.parent)
