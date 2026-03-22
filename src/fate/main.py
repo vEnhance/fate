@@ -154,6 +154,7 @@ def main() -> None:
     )
     p_gamble.add_argument("directory", nargs="?", default=None)
     p_gamble.add_argument(
+        "-t",
         "--throttle",
         type=_parse_duration,
         default=0.0,
@@ -167,6 +168,7 @@ def main() -> None:
     )
     p_list.add_argument("directory", nargs="?", default=None)
     p_list.add_argument(
+        "-t",
         "--throttle",
         type=_parse_duration,
         default=0.0,
@@ -174,6 +176,7 @@ def main() -> None:
         help="delay between repos (e.g. 1s, 500ms, 2m)",
     )
     p_list.add_argument(
+        "-f",
         "--fetch",
         action="store_true",
         default=False,
