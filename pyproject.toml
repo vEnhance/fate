@@ -1,14 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "fate-casino"
 version = "0.1.0"
 description = "✨💖 Don't think, just pull! 🎰🪙"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 authors = [{ name = "Evan Chen", email = "evan@evanchen.cc" }]
 license = { text = "MIT" }
 urls = { repository = "https://github.com/vEnhance/fate-casino" }
 
-dependencies = []
+dependencies = [
+    "gitpython>=3.1.46",
+    "tomli>=2.4.0",
+    "tomlkit>=0.14.0",
+]
+
+[project.scripts]
+fate = "fate.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fate"]
 
 [dependency-groups]
 dev = [
