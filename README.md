@@ -66,6 +66,10 @@ Note that `fate` will never run a task not actually enabled in `.faterc`.
 
 You can throttle the run with `-t`/`--throttle` to sleep a bit between repositories.
 
+You can also pass `-a`/`--all` so that discovered Git repositories,
+even if they don't have `.faterc` set up,
+will allow just `pull` and `push` actions.
+
 ### fate ls (or fate l, or fate list)
 
 Shows the status of each repository without running any tasks.
