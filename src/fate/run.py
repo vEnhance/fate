@@ -43,10 +43,6 @@ def venv_env(venv: str, repo_root: Path) -> dict[str, str]:
 def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> None:
     repo = git.Repo(git_root)
 
-    if is_dirty(repo):
-        print(colorize("1;33", f"Skipping {git_root}: Working directory is dirty"))
-        return
-
     faterc_path = find_faterc(git_root)
     assert faterc_path is not None
     with open(faterc_path, "rb") as f:
@@ -57,6 +53,19 @@ def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> No
     branch = config.get("branch", "main")
     venv = config.get("venv")
     env = venv_env(venv, git_root) if venv else os.environ.copy()
+
+    if is_dirty(repo):
+        if actions.get("pull", {}).get("enabled", False):
+            print(
+                colorize(
+                    "1;33",
+                    f"{git_root}: Working directory is dirty, running git fetch only",
+                )
+            )
+            subprocess.run(["git", "fetch"], cwd=git_root, check=True)
+        else:
+            print(colorize("1;33", f"Skipping {git_root}: Working directory is dirty"))
+        return
 
     orig = current_branch(repo)
     if orig != branch:
