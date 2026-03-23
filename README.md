@@ -9,7 +9,7 @@ in which the protagonists become addicted to the Keeper's gacha machines.)
 
 ## Installation
 
-It's `fate-casino` on PyPi, so e.g.
+It's `fate-casino` on PyPI, so e.g.
 
 ```bash
 uv tool install fate-casino
