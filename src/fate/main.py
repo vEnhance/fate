@@ -240,7 +240,7 @@ def main() -> None:
         "--push",
         action="store_true",
         default=False,
-        help="Also run push (= multirun with no exclusions)",
+        help="Also run push (= multirun with no exclusions), legacy option",
     )
     p_gamble.set_defaults(func=cmd_gamble)
 
