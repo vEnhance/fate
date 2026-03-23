@@ -69,10 +69,15 @@ def _run_all(
             time.sleep(throttle)
         if i > 0 and blank_lines:
             print()
-        if not print_repo_status(entry.path):
-            continue
         try:
+            if not print_repo_status(entry.path):
+                continue
             run_repo(entry, only=only, exclude=exclude, prek_rev_cache=prek_rev_cache)
+        except git.InvalidGitRepositoryError:
+            print(
+                f"Warning: {entry.path}: not a valid git repository, skipping",
+                file=sys.stderr,
+            )
         except (subprocess.CalledProcessError, git.GitCommandError) as e:
             print(f"Error: {e}", file=sys.stderr)
 
