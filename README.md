@@ -66,11 +66,16 @@ Note that `fate` will never run a task not actually enabled in `.faterc`.
 
 You can throttle the run with `-t`/`--throttle` to sleep a bit between repositories.
 
+### fate ls (or fate l, or fate list)
+
+Shows the status of each repository without running any tasks.
+(It doesn't make any network queries, so it's the fastest.)
+
 ### Shortcuts for fate multirun
 
-- **fate ls (or fate l, or fate list)**:
-  shows the status of each repository without running any tasks.
-  It doesn't make any network queries, so it's the fastest.
+`fate ls` is actually just `fate multirun` with an empty `--only` list.
+We also have the following:
+
 - **fate pull**: equivalent to `fate multirun --only pull`
 - **fate gamble (or fate g)**:
   equivalent to `fate multirun --exclude push`.
