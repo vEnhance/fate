@@ -33,11 +33,11 @@ def has_upstream(repo: git.Repo) -> bool:
         return False
 
 
-def print_repo_status(repo_root: Path) -> bool:
+def print_repo_status(repo_root: Path, path_prefix: str = "") -> bool:
     """Print a status line for repo_root. Returns False if no remote (caller should skip)."""
     repo = git.Repo(repo_root)
     branch = current_branch(repo)
-    name = colorize("1;34", repo_root.name)
+    name = f"{path_prefix}{colorize('1;34', repo_root.name)}"
 
     if not repo.remotes:
         print(f"{name} (no remote)")

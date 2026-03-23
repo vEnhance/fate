@@ -51,6 +51,7 @@ def _run_all(
     throttle: float = 0.0,
     blank_lines: bool = True,
     all_repos: bool = False,
+    show_path: bool = False,
 ) -> None:
     if all_repos:
         repos = iter_all_repos(target)
@@ -70,7 +71,14 @@ def _run_all(
         if i > 0 and blank_lines:
             print()
         try:
-            if not print_repo_status(entry.path):
+            path_prefix = ""
+            if show_path:
+                try:
+                    parent = entry.path.relative_to(target).parent
+                    path_prefix = str(parent) + "/" if str(parent) != "." else ""
+                except ValueError:
+                    path_prefix = str(entry.path.parent) + "/"
+            if not print_repo_status(entry.path, path_prefix=path_prefix):
                 continue
             run_repo(entry, only=only, exclude=exclude, prek_rev_cache=prek_rev_cache)
         except git.InvalidGitRepositoryError:
@@ -102,7 +110,12 @@ def cmd_gamble(args: argparse.Namespace) -> None:
     target = Path(args.directory).resolve() if args.directory else Path.cwd()
     exclude: set[str] = set() if args.push else {"push"}
     _run_all(
-        target, only=None, exclude=exclude, throttle=args.throttle, all_repos=args.all
+        target,
+        only=None,
+        exclude=exclude,
+        throttle=args.throttle,
+        all_repos=args.all,
+        show_path=args.show_path,
     )
 
 
@@ -115,20 +128,31 @@ def cmd_list(args: argparse.Namespace) -> None:
         throttle=args.throttle,
         blank_lines=False,
         all_repos=args.all,
+        show_path=args.show_path,
     )
 
 
 def cmd_pull(args: argparse.Namespace) -> None:
     target = Path(args.directory).resolve() if args.directory else Path.cwd()
     _run_all(
-        target, only={"pull"}, exclude=set(), throttle=args.throttle, all_repos=args.all
+        target,
+        only={"pull"},
+        exclude=set(),
+        throttle=args.throttle,
+        all_repos=args.all,
+        show_path=args.show_path,
     )
 
 
 def cmd_push(args: argparse.Namespace) -> None:
     target = Path(args.directory).resolve() if args.directory else Path.cwd()
     _run_all(
-        target, only={"push"}, exclude=set(), throttle=args.throttle, all_repos=args.all
+        target,
+        only={"push"},
+        exclude=set(),
+        throttle=args.throttle,
+        all_repos=args.all,
+        show_path=args.show_path,
     )
 
 
@@ -137,7 +161,12 @@ def cmd_multirun(args: argparse.Namespace) -> None:
     only = _parse_tasks(args.only)
     exclude = _parse_tasks(args.exclude) or set()
     _run_all(
-        target, only=only, exclude=exclude, throttle=args.throttle, all_repos=args.all
+        target,
+        only=only,
+        exclude=exclude,
+        throttle=args.throttle,
+        all_repos=args.all,
+        show_path=args.show_path,
     )
 
 
@@ -242,6 +271,13 @@ def main() -> None:
         default=False,
         help="Include all git repos under the directory, even without .faterc",
     )
+    p_list.add_argument(
+        "-s",
+        "--show-path",
+        action="store_true",
+        default=False,
+        help="Show each repo's path relative to the search directory",
+    )
     p_list.set_defaults(func=cmd_list)
 
     p_pull = sub.add_parser("pull", help="Run only the pull task on all repositories.")
@@ -260,6 +296,13 @@ def main() -> None:
         action="store_true",
         default=False,
         help="Include all git repos under the directory, even without .faterc",
+    )
+    p_pull.add_argument(
+        "-s",
+        "--show-path",
+        action="store_true",
+        default=False,
+        help="Show each repo's path relative to the search directory",
     )
     p_pull.set_defaults(func=cmd_pull)
 
@@ -288,6 +331,13 @@ def main() -> None:
         default=False,
         help="Include all git repos under the directory, even without .faterc",
     )
+    p_gamble.add_argument(
+        "-s",
+        "--show-path",
+        action="store_true",
+        default=False,
+        help="Show each repo's path relative to the search directory",
+    )
     p_gamble.set_defaults(func=cmd_gamble)
 
     p_push = sub.add_parser("push", help="Run only the push task on all repositories.")
@@ -306,6 +356,13 @@ def main() -> None:
         action="store_true",
         default=False,
         help="Include all git repos under the directory, even without .faterc",
+    )
+    p_push.add_argument(
+        "-s",
+        "--show-path",
+        action="store_true",
+        default=False,
+        help="Show each repo's path relative to the search directory",
     )
     p_push.set_defaults(func=cmd_push)
 
@@ -343,6 +400,13 @@ def main() -> None:
         action="store_true",
         default=False,
         help="Include all git repos under the directory, even without .faterc",
+    )
+    p_multirun.add_argument(
+        "-s",
+        "--show-path",
+        action="store_true",
+        default=False,
+        help="Show each repo's path relative to the search directory",
     )
     p_multirun.set_defaults(func=cmd_multirun)
 
