@@ -1,4 +1,4 @@
-# fate-casino
+# fate
 
 _Pull makes happy!_
 
