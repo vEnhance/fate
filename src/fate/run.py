@@ -70,7 +70,9 @@ def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> No
         if uv_cfg.get("enabled", False):
             if not venv:
                 raise ValueError("uv action requires venv to be set in [config]")
-            subprocess.run(["uv", "sync", "-U"], cwd=git_root, env=env, check=True)
+            subprocess.run(
+                ["uv", "sync", "--upgrade"], cwd=git_root, env=env, check=True
+            )
             if uv_cfg.get("commit", True) and is_dirty(repo):
                 subprocess.run(
                     ["git", "commit", "-am", "chore(deps): uv sync -U"],
