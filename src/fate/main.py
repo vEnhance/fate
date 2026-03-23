@@ -11,7 +11,7 @@ import tomlkit
 import tomlkit.items
 
 from fate.git_utils import find_git_root, has_upstream, print_repo_status
-from fate.run import find_faterc, iter_all_repos, iter_repos, run_repo
+from fate.run import RepoEntry, find_faterc, iter_all_repos, iter_repos, run_repo
 
 
 def _parse_duration(s: str) -> float:
@@ -53,33 +53,26 @@ def _run_all(
     all_repos: bool = False,
 ) -> None:
     if all_repos:
-        repos_with_flags = iter_all_repos(target)
-        if not repos_with_flags:
+        repos = iter_all_repos(target)
+        if not repos:
             print(f"No git repositories found in {target}")
             return
     else:
-        plain = iter_repos(target)
-        if not plain:
+        repos = iter_repos(target)
+        if not repos:
             print(f"No .faterc or faterc files found in {target}")
             return
-        repos_with_flags = [(r, True) for r in plain]
 
     prek_rev_cache: dict[str, str] = {}
-    for i, (repo_root, has_faterc) in enumerate(repos_with_flags):
+    for i, entry in enumerate(repos):
         if i > 0 and throttle:
             time.sleep(throttle)
         if i > 0 and blank_lines:
             print()
-        if not print_repo_status(repo_root):
+        if not print_repo_status(entry.path):
             continue
         try:
-            run_repo(
-                repo_root,
-                only=only,
-                exclude=exclude,
-                prek_rev_cache=prek_rev_cache,
-                bare=not has_faterc,
-            )
+            run_repo(entry, only=only, exclude=exclude, prek_rev_cache=prek_rev_cache)
         except (subprocess.CalledProcessError, git.GitCommandError) as e:
             print(f"Error: {e}", file=sys.stderr)
 
@@ -92,11 +85,12 @@ def cmd_run(args: argparse.Namespace) -> None:
         print(f"Error: {target} is not in a git repository", file=sys.stderr)
         sys.exit(1)
 
-    if find_faterc(git_root) is None:
+    faterc = find_faterc(git_root)
+    if faterc is None:
         print(f"Error: No .faterc or faterc found in {git_root}", file=sys.stderr)
         sys.exit(1)
 
-    run_repo(git_root)
+    run_repo(RepoEntry.from_faterc(git_root, faterc))
 
 
 def cmd_gamble(args: argparse.Namespace) -> None:

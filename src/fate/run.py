@@ -3,6 +3,7 @@ import shutil
 import subprocess
 import sys
 import tomllib
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import git
@@ -10,6 +11,34 @@ import git
 from fate.color import colorize
 from fate.git_utils import current_branch, is_dirty
 from fate.prek import prek_revs, prek_up_to_date, prek_update_cache
+
+
+@dataclass
+class RepoEntry:
+    path: Path
+    faterc: Path | None
+    branch: str | None = (
+        None  # None → use current branch at runtime (unconfigured repos)
+    )
+    venv: str | None = None
+    actions: dict = field(default_factory=dict)
+
+    @classmethod
+    def from_faterc(cls, path: Path, faterc: Path) -> "RepoEntry":
+        with open(faterc, "rb") as f:
+            data = tomllib.load(f)
+        config = data.get("config", {})
+        return cls(
+            path=path,
+            faterc=faterc,
+            branch=config.get("branch", "main"),
+            venv=config.get("venv"),
+            actions=data.get("actions", {}),
+        )
+
+    @classmethod
+    def unconfigured(cls, path: Path) -> "RepoEntry":
+        return cls(path=path, faterc=None)
 
 
 def find_faterc(directory: Path) -> Path | None:
@@ -41,46 +70,32 @@ def venv_env(venv: str, repo_root: Path) -> dict[str, str]:
 
 
 def run_repo(
-    git_root: Path,
+    entry: RepoEntry,
     only: set[str] | None = None,
     exclude: set[str] | None = None,
     prek_rev_cache: dict[str, str] | None = None,
-    bare: bool = False,
 ) -> None:
     """Run enabled actions on a single repo.
 
-    only: if given, restrict to this set of task names (still gated by faterc)
+    only: if given, restrict to this set of task names (still gated by faterc for configured repos)
     exclude: skip these task names
-    bare: if True, no faterc is loaded; only pull/push are allowed, targeting the current branch.
-    Tasks disabled in faterc are never run regardless of only/exclude.
+    Unconfigured repos (entry.faterc is None) only allow pull/push, targeting the current branch.
     """
+    git_root = entry.path
     repo = git.Repo(git_root)
     exclude = exclude or set()
 
-    venv = None
-    actions: dict = {}
-    if bare:
-        branch = current_branch(repo)
-    else:
-        faterc_path = find_faterc(git_root)
-        assert faterc_path is not None
-        with open(faterc_path, "rb") as f:
-            faterc = tomllib.load(f)
-        config = faterc.get("config", {})
-        actions = faterc.get("actions", {})
-        branch = config.get("branch", "main")
-        venv = config.get("venv")
-
-    env = venv_env(venv, git_root) if venv else os.environ.copy()
+    branch = entry.branch or current_branch(repo)
+    env = venv_env(entry.venv, git_root) if entry.venv else os.environ.copy()
 
     def active(name: str) -> bool:
         if only is not None and name not in only:
             return False
         if name in exclude:
             return False
-        if bare:
+        if entry.faterc is None:
             return name in {"pull", "push"}
-        return actions.get(name, {}).get("enabled", False)
+        return entry.actions.get(name, {}).get("enabled", False)
 
     pull_active = active("pull")
     uv_active = active("uv")
@@ -128,9 +143,9 @@ def run_repo(
         if pull_active:
             subprocess.run(["git", "pull"], cwd=git_root, check=True)
 
-        uv_cfg = actions.get("uv", {})
+        uv_cfg = entry.actions.get("uv", {})
         if uv_active:
-            if not venv:
+            if not entry.venv:
                 raise ValueError("uv action requires venv to be set in [config]")
             subprocess.run(
                 ["uv", "sync", "--upgrade"], cwd=git_root, env=env, check=True
@@ -143,7 +158,7 @@ def run_repo(
                     check=True,
                 )
 
-        prek_cfg = actions.get("prek", {})
+        prek_cfg = entry.actions.get("prek", {})
         if prek_active:
             prek_toml = git_root / "prek.toml"
             if prek_rev_cache is not None and prek_up_to_date(
@@ -181,7 +196,7 @@ def run_repo(
                     check=True,
                 )
 
-        push_cfg = actions.get("push", {})
+        push_cfg = entry.actions.get("push", {})
         if push_active:
             try:
                 ahead = int(repo.git.rev_list("--count", "@{u}..HEAD"))
@@ -214,13 +229,14 @@ def _find_faterc_files(target: Path) -> list[Path]:
     return sorted(files)
 
 
-def iter_repos(target: Path) -> list[Path]:
+def iter_repos(target: Path) -> list[RepoEntry]:
     seen: set[Path] = set()
     repos = []
     for faterc in _find_faterc_files(target):
-        if faterc.parent not in seen:
-            seen.add(faterc.parent)
-            repos.append(faterc.parent)
+        parent = faterc.parent
+        if parent not in seen:
+            seen.add(parent)
+            repos.append(RepoEntry.from_faterc(parent, faterc))
     return repos
 
 
@@ -242,8 +258,10 @@ def _find_git_repos(target: Path) -> list[Path]:
     return sorted(repos)
 
 
-def iter_all_repos(target: Path) -> list[tuple[Path, bool]]:
-    """Return (repo_root, has_faterc) for every git repo found under target."""
-    faterc_repos = set(iter_repos(target))
-    git_repos = _find_git_repos(target)
-    return [(repo, repo in faterc_repos) for repo in git_repos]
+def iter_all_repos(target: Path) -> list[RepoEntry]:
+    """Return a RepoEntry for every git repo found under target."""
+    configured = {entry.path: entry for entry in iter_repos(target)}
+    return [
+        configured.get(repo, RepoEntry.unconfigured(repo))
+        for repo in _find_git_repos(target)
+    ]
