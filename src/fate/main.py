@@ -59,7 +59,7 @@ def _run_all(
     for i, repo_root in enumerate(repos):
         if i > 0 and throttle:
             time.sleep(throttle)
-        if blank_lines:
+        if i > 0 and blank_lines:
             print()
         if not print_repo_status(repo_root):
             continue
