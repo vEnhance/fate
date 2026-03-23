@@ -45,25 +45,32 @@ def run_repo(
     only: set[str] | None = None,
     exclude: set[str] | None = None,
     prek_rev_cache: dict[str, str] | None = None,
+    bare: bool = False,
 ) -> None:
     """Run enabled actions on a single repo.
 
     only: if given, restrict to this set of task names (still gated by faterc)
     exclude: skip these task names
+    bare: if True, no faterc is loaded; only pull/push are allowed, targeting the current branch.
     Tasks disabled in faterc are never run regardless of only/exclude.
     """
     repo = git.Repo(git_root)
     exclude = exclude or set()
 
-    faterc_path = find_faterc(git_root)
-    assert faterc_path is not None
-    with open(faterc_path, "rb") as f:
-        faterc = tomllib.load(f)
+    venv = None
+    actions: dict = {}
+    if bare:
+        branch = current_branch(repo)
+    else:
+        faterc_path = find_faterc(git_root)
+        assert faterc_path is not None
+        with open(faterc_path, "rb") as f:
+            faterc = tomllib.load(f)
+        config = faterc.get("config", {})
+        actions = faterc.get("actions", {})
+        branch = config.get("branch", "main")
+        venv = config.get("venv")
 
-    config = faterc.get("config", {})
-    actions = faterc.get("actions", {})
-    branch = config.get("branch", "main")
-    venv = config.get("venv")
     env = venv_env(venv, git_root) if venv else os.environ.copy()
 
     def active(name: str) -> bool:
@@ -71,6 +78,8 @@ def run_repo(
             return False
         if name in exclude:
             return False
+        if bare:
+            return name in {"pull", "push"}
         return actions.get(name, {}).get("enabled", False)
 
     pull_active = active("pull")
@@ -213,3 +222,28 @@ def iter_repos(target: Path) -> list[Path]:
             seen.add(faterc.parent)
             repos.append(faterc.parent)
     return repos
+
+
+def _find_git_repos(target: Path) -> list[Path]:
+    """Find all git repository roots under (and including) target."""
+    fd = shutil.which("fdfind") or shutil.which("fd")
+    if fd is not None:
+        result = subprocess.run(
+            [fd, "--unrestricted", "--type", "d", r"^\.git$", str(target)],
+            capture_output=True,
+            text=True,
+        )
+        return sorted(Path(p).parent for p in result.stdout.splitlines() if p)
+    repos = []
+    for dirpath, dirnames, _ in os.walk(target):
+        if ".git" in dirnames:
+            repos.append(Path(dirpath))
+            dirnames.remove(".git")  # don't recurse into .git itself
+    return sorted(repos)
+
+
+def iter_all_repos(target: Path) -> list[tuple[Path, bool]]:
+    """Return (repo_root, has_faterc) for every git repo found under target."""
+    faterc_repos = set(iter_repos(target))
+    git_repos = _find_git_repos(target)
+    return [(repo, repo in faterc_repos) for repo in git_repos]

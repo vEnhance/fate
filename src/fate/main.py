@@ -11,7 +11,7 @@ import tomlkit
 import tomlkit.items
 
 from fate.git_utils import find_git_root, has_upstream, print_repo_status
-from fate.run import find_faterc, iter_repos, run_repo
+from fate.run import find_faterc, iter_all_repos, iter_repos, run_repo
 
 
 def _parse_duration(s: str) -> float:
@@ -50,13 +50,22 @@ def _run_all(
     exclude: set[str],
     throttle: float = 0.0,
     blank_lines: bool = True,
+    all_repos: bool = False,
 ) -> None:
-    repos = iter_repos(target)
-    if not repos:
-        print(f"No .faterc or faterc files found in {target}")
-        return
+    if all_repos:
+        repos_with_flags = iter_all_repos(target)
+        if not repos_with_flags:
+            print(f"No git repositories found in {target}")
+            return
+    else:
+        plain = iter_repos(target)
+        if not plain:
+            print(f"No .faterc or faterc files found in {target}")
+            return
+        repos_with_flags = [(r, True) for r in plain]
+
     prek_rev_cache: dict[str, str] = {}
-    for i, repo_root in enumerate(repos):
+    for i, (repo_root, has_faterc) in enumerate(repos_with_flags):
         if i > 0 and throttle:
             time.sleep(throttle)
         if i > 0 and blank_lines:
@@ -65,7 +74,11 @@ def _run_all(
             continue
         try:
             run_repo(
-                repo_root, only=only, exclude=exclude, prek_rev_cache=prek_rev_cache
+                repo_root,
+                only=only,
+                exclude=exclude,
+                prek_rev_cache=prek_rev_cache,
+                bare=not has_faterc,
             )
         except (subprocess.CalledProcessError, git.GitCommandError) as e:
             print(f"Error: {e}", file=sys.stderr)
@@ -89,31 +102,44 @@ def cmd_run(args: argparse.Namespace) -> None:
 def cmd_gamble(args: argparse.Namespace) -> None:
     target = Path(args.directory).resolve() if args.directory else Path.cwd()
     exclude: set[str] = set() if args.push else {"push"}
-    _run_all(target, only=None, exclude=exclude, throttle=args.throttle)
+    _run_all(
+        target, only=None, exclude=exclude, throttle=args.throttle, all_repos=args.all
+    )
 
 
 def cmd_list(args: argparse.Namespace) -> None:
     target = Path(args.directory).resolve() if args.directory else Path.cwd()
     _run_all(
-        target, only=set(), exclude=set(), throttle=args.throttle, blank_lines=False
+        target,
+        only=set(),
+        exclude=set(),
+        throttle=args.throttle,
+        blank_lines=False,
+        all_repos=args.all,
     )
 
 
 def cmd_pull(args: argparse.Namespace) -> None:
     target = Path(args.directory).resolve() if args.directory else Path.cwd()
-    _run_all(target, only={"pull"}, exclude=set(), throttle=args.throttle)
+    _run_all(
+        target, only={"pull"}, exclude=set(), throttle=args.throttle, all_repos=args.all
+    )
 
 
 def cmd_push(args: argparse.Namespace) -> None:
     target = Path(args.directory).resolve() if args.directory else Path.cwd()
-    _run_all(target, only={"push"}, exclude=set(), throttle=args.throttle)
+    _run_all(
+        target, only={"push"}, exclude=set(), throttle=args.throttle, all_repos=args.all
+    )
 
 
 def cmd_multirun(args: argparse.Namespace) -> None:
     target = Path(args.directory).resolve() if args.directory else Path.cwd()
     only = _parse_tasks(args.only)
     exclude = _parse_tasks(args.exclude) or set()
-    _run_all(target, only=only, exclude=exclude, throttle=args.throttle)
+    _run_all(
+        target, only=only, exclude=exclude, throttle=args.throttle, all_repos=args.all
+    )
 
 
 def cmd_init(args: argparse.Namespace) -> None:
@@ -210,6 +236,13 @@ def main() -> None:
         metavar="DURATION",
         help="Delay between repos (e.g. 1s, 500ms, 2m)",
     )
+    p_list.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        default=False,
+        help="Include all git repos under the directory, even without .faterc",
+    )
     p_list.set_defaults(func=cmd_list)
 
     p_pull = sub.add_parser("pull", help="Run only the pull task on all repositories.")
@@ -221,6 +254,13 @@ def main() -> None:
         default=0.0,
         metavar="DURATION",
         help="delay between repos (e.g. 1s, 500ms, 2m)",
+    )
+    p_pull.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        default=False,
+        help="Include all git repos under the directory, even without .faterc",
     )
     p_pull.set_defaults(func=cmd_pull)
 
@@ -242,6 +282,13 @@ def main() -> None:
         default=False,
         help="Also run push (= multirun with no exclusions), legacy option",
     )
+    p_gamble.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        default=False,
+        help="Include all git repos under the directory, even without .faterc",
+    )
     p_gamble.set_defaults(func=cmd_gamble)
 
     p_push = sub.add_parser("push", help="Run only the push task on all repositories.")
@@ -253,6 +300,13 @@ def main() -> None:
         default=0.0,
         metavar="DURATION",
         help="delay between repos (e.g. 1s, 500ms, 2m)",
+    )
+    p_push.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        default=False,
+        help="Include all git repos under the directory, even without .faterc",
     )
     p_push.set_defaults(func=cmd_push)
 
@@ -283,6 +337,13 @@ def main() -> None:
         action="append",
         metavar="TASKS",
         help="Skip these tasks, comma-separated. Repeatable.",
+    )
+    p_multirun.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        default=False,
+        help="Include all git repos under the directory, even without .faterc",
     )
     p_multirun.set_defaults(func=cmd_multirun)
 
