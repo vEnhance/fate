@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 authors = [{ name = "Evan Chen", email = "evan@evanchen.cc" }]
 license = { text = "MIT" }
-urls = { repository = "https://github.com/vEnhance/fate-casino" }
+urls = { repository = "https://github.com/vEnhance/fate" }
 
 dependencies = [
     "gitpython>=3.1.46",
