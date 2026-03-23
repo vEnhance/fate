@@ -4,6 +4,7 @@ import re
 import subprocess
 import sys
 import time
+from importlib.metadata import version
 from pathlib import Path
 
 import git
@@ -232,6 +233,12 @@ def main() -> None:
         prog="fate",
         description="Runs git pull and other commands recursively on your git repositories.",
         epilog="✨💖 Don't ask, just pull! 🎰🪙",
+    )
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=f"%(prog)s {version('fate-casino')}",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
