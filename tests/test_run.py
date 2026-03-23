@@ -331,11 +331,22 @@ def test_find_git_repos_multiple(tmp_path):
     assert len(result) == 2
 
 
-def test_find_git_repos_does_not_walk_into_git_dir(tmp_path):
+def test_find_git_repos_skips_nested_repos(tmp_path):
+    """A git repo inside another git repo's working tree is not returned."""
     (tmp_path / ".git").mkdir()
-    # A .git inside .git should not produce a second entry
-    (tmp_path / ".git" / "modules").mkdir()
-    (tmp_path / ".git" / "modules" / ".git").mkdir()
+    nested = tmp_path / "vendor" / "lib"
+    nested.mkdir(parents=True)
+    (nested / ".git").mkdir()
+    assert _find_git_repos(tmp_path) == [tmp_path]
+
+
+def test_find_git_repos_skips_submodules(tmp_path):
+    """Submodules have .git as a file; they should not appear as repo roots."""
+    (tmp_path / ".git").mkdir()
+    sub = tmp_path / "sub"
+    sub.mkdir()
+    # Submodules use a .git file, not a directory
+    (sub / ".git").write_text("gitdir: ../.git/modules/sub\n")
     assert _find_git_repos(tmp_path) == [tmp_path]
 
 

@@ -241,7 +241,10 @@ def iter_repos(target: Path) -> list[RepoEntry]:
 
 
 def _find_git_repos(target: Path) -> list[Path]:
-    """Find all git repository roots under (and including) target."""
+    """Find top-level git repository roots under (and including) target.
+
+    Repos nested inside another git repo (submodules, vendored repos, etc.) are skipped.
+    """
     fd = shutil.which("fdfind") or shutil.which("fd")
     if fd is not None:
         result = subprocess.run(
@@ -249,13 +252,21 @@ def _find_git_repos(target: Path) -> list[Path]:
             capture_output=True,
             text=True,
         )
-        return sorted(Path(p).parent for p in result.stdout.splitlines() if p)
-    repos = []
-    for dirpath, dirnames, _ in os.walk(target):
-        if ".git" in dirnames:
-            repos.append(Path(dirpath))
-            dirnames.remove(".git")  # don't recurse into .git itself
-    return sorted(repos)
+        candidates = sorted(Path(p).parent for p in result.stdout.splitlines() if p)
+    else:
+        candidates = []
+        for dirpath, dirnames, _ in os.walk(target):
+            if ".git" in dirnames:
+                candidates.append(Path(dirpath))
+                dirnames.clear()  # stop recursing into this repo entirely
+        candidates.sort()
+
+    # Strip repos that are nested inside another found repo (needed for the fd path).
+    top_level: list[Path] = []
+    for repo in candidates:
+        if not top_level or not repo.is_relative_to(top_level[-1]):
+            top_level.append(repo)
+    return top_level
 
 
 def iter_all_repos(target: Path) -> list[RepoEntry]:
