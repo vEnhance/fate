@@ -40,8 +40,20 @@ def venv_env(venv: str, repo_root: Path) -> dict[str, str]:
     return env
 
 
-def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> None:
+def run_repo(
+    git_root: Path,
+    only: set[str] | None = None,
+    exclude: set[str] | None = None,
+    prek_rev_cache: dict[str, str] | None = None,
+) -> None:
+    """Run enabled actions on a single repo.
+
+    only: if given, restrict to this set of task names (still gated by faterc)
+    exclude: skip these task names
+    Tasks disabled in faterc are never run regardless of only/exclude.
+    """
     repo = git.Repo(git_root)
+    exclude = exclude or set()
 
     faterc_path = find_faterc(git_root)
     assert faterc_path is not None
@@ -54,8 +66,21 @@ def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> No
     venv = config.get("venv")
     env = venv_env(venv, git_root) if venv else os.environ.copy()
 
+    def active(name: str) -> bool:
+        if only is not None and name not in only:
+            return False
+        if name in exclude:
+            return False
+        return actions.get(name, {}).get("enabled", False)
+
+    pull_active = active("pull")
+    uv_active = active("uv")
+    prek_active = active("prek")
+    push_active = active("push")
+    needs_branch = uv_active or prek_active or push_active
+
     if is_dirty(repo):
-        if actions.get("pull", {}).get("enabled", False):
+        if pull_active:
             print(
                 colorize(
                     "1;33",
@@ -63,20 +88,39 @@ def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> No
                 )
             )
             subprocess.run(["git", "fetch"], cwd=git_root, check=True)
-        else:
+        elif needs_branch:
             print(colorize("1;33", f"Skipping {git_root}: Working directory is dirty"))
         return
 
     orig = current_branch(repo)
+
+    if pull_active and not needs_branch:
+        # No branch-switching tasks active: update target branch without checkout.
+        if orig == branch:
+            subprocess.run(["git", "pull"], cwd=git_root, check=True)
+        else:
+            # Fast-forward the local branch ref from origin without switching to it.
+            result = subprocess.run(
+                ["git", "fetch", "origin", f"{branch}:{branch}"],
+                cwd=git_root,
+            )
+            if result.returncode != 0:
+                # Diverged or no upstream; fall back to plain fetch.
+                subprocess.run(["git", "fetch"], cwd=git_root, check=True)
+        return
+
+    if not needs_branch:
+        return
+
     if orig != branch:
         subprocess.run(["git", "checkout", branch], cwd=git_root, check=True)
 
     try:
-        if actions.get("pull", {}).get("enabled", False):
+        if pull_active:
             subprocess.run(["git", "pull"], cwd=git_root, check=True)
 
         uv_cfg = actions.get("uv", {})
-        if uv_cfg.get("enabled", False):
+        if uv_active:
             if not venv:
                 raise ValueError("uv action requires venv to be set in [config]")
             subprocess.run(
@@ -91,7 +135,7 @@ def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> No
                 )
 
         prek_cfg = actions.get("prek", {})
-        if prek_cfg.get("enabled", False):
+        if prek_active:
             prek_toml = git_root / "prek.toml"
             if prek_rev_cache is not None and prek_up_to_date(
                 prek_toml, prek_rev_cache
@@ -129,7 +173,7 @@ def run_repo(git_root: Path, prek_rev_cache: dict[str, str] | None = None) -> No
                 )
 
         push_cfg = actions.get("push", {})
-        if push_cfg.get("enabled", False):
+        if push_active:
             try:
                 ahead = int(repo.git.rev_list("--count", "@{u}..HEAD"))
             except git.GitCommandError:

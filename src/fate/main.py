@@ -25,6 +25,52 @@ def _parse_duration(s: str) -> float:
     return value * {"ms": 0.001, "s": 1, "m": 60, "h": 3600}[unit]
 
 
+VALID_TASKS = {"pull", "uv", "prek", "push"}
+
+
+def _parse_tasks(raw: list[str] | None) -> set[str] | None:
+    """Parse repeated/comma-separated --only / --exclude values."""
+    if raw is None:
+        return None
+    result: set[str] = set()
+    for item in raw:
+        for task in item.split(","):
+            task = task.strip()
+            if not task:
+                continue
+            if task not in VALID_TASKS:
+                print(f"Warning: unknown task {task!r}", file=sys.stderr)
+            result.add(task)
+    return result
+
+
+def _run_all(
+    target: Path,
+    only: set[str] | None,
+    exclude: set[str],
+    throttle: float = 0.0,
+    blank_lines: bool = True,
+) -> None:
+    repos = iter_repos(target)
+    if not repos:
+        print(f"No .faterc or faterc files found in {target}")
+        return
+    prek_rev_cache: dict[str, str] = {}
+    for i, repo_root in enumerate(repos):
+        if i > 0 and throttle:
+            time.sleep(throttle)
+        if blank_lines:
+            print()
+        if not print_repo_status(repo_root):
+            continue
+        try:
+            run_repo(
+                repo_root, only=only, exclude=exclude, prek_rev_cache=prek_rev_cache
+            )
+        except (subprocess.CalledProcessError, git.GitCommandError) as e:
+            print(f"Error: {e}", file=sys.stderr)
+
+
 def cmd_run(args: argparse.Namespace) -> None:
     target = Path(args.directory).resolve() if args.directory else Path.cwd()
 
@@ -42,35 +88,32 @@ def cmd_run(args: argparse.Namespace) -> None:
 
 def cmd_gamble(args: argparse.Namespace) -> None:
     target = Path(args.directory).resolve() if args.directory else Path.cwd()
-    repos = iter_repos(target)
-    if not repos:
-        print(f"No .faterc or faterc files found in {target}")
-        return
-
-    prek_rev_cache: dict[str, str] = {}
-    for i, repo_root in enumerate(repos):
-        if i > 0 and args.throttle:
-            time.sleep(args.throttle)
-        print()
-        if not print_repo_status(repo_root):
-            continue
-        try:
-            run_repo(repo_root, prek_rev_cache=prek_rev_cache)
-        except (subprocess.CalledProcessError, git.GitCommandError) as e:
-            print(f"Error: {e}", file=sys.stderr)
+    exclude: set[str] = set() if args.push else {"push"}
+    _run_all(target, only=None, exclude=exclude, throttle=args.throttle)
 
 
 def cmd_list(args: argparse.Namespace) -> None:
     target = Path(args.directory).resolve() if args.directory else Path.cwd()
-    repos = iter_repos(target)
-    if not repos:
-        print(f"No .faterc or faterc files found in {target}")
-        return
-    for i, repo_root in enumerate(repos):
-        if args.fetch and i > 0 and args.throttle:
-            time.sleep(args.throttle)
-            subprocess.run(["git", "fetch", "--quiet"], cwd=repo_root, check=False)
-        print_repo_status(repo_root)
+    _run_all(
+        target, only=set(), exclude=set(), throttle=args.throttle, blank_lines=False
+    )
+
+
+def cmd_pull(args: argparse.Namespace) -> None:
+    target = Path(args.directory).resolve() if args.directory else Path.cwd()
+    _run_all(target, only={"pull"}, exclude=set(), throttle=args.throttle)
+
+
+def cmd_push(args: argparse.Namespace) -> None:
+    target = Path(args.directory).resolve() if args.directory else Path.cwd()
+    _run_all(target, only={"push"}, exclude=set(), throttle=args.throttle)
+
+
+def cmd_multirun(args: argparse.Namespace) -> None:
+    target = Path(args.directory).resolve() if args.directory else Path.cwd()
+    only = _parse_tasks(args.only)
+    exclude = _parse_tasks(args.exclude) or set()
+    _run_all(target, only=only, exclude=exclude, throttle=args.throttle)
 
 
 def cmd_init(args: argparse.Namespace) -> None:
@@ -149,6 +192,12 @@ def main() -> None:
     )
     p_init.set_defaults(func=cmd_init)
 
+    p_run = sub.add_parser(
+        "run", aliases=["r"], help="Run fate on a single repository."
+    )
+    p_run.add_argument("directory", nargs="?", default=None)
+    p_run.set_defaults(func=cmd_run)
+
     p_list = sub.add_parser(
         "list", aliases=["l", "ls"], help="Show repo statuses without running."
     )
@@ -161,23 +210,22 @@ def main() -> None:
         metavar="DURATION",
         help="Delay between repos (e.g. 1s, 500ms, 2m)",
     )
-    p_list.add_argument(
-        "-f",
-        "--fetch",
-        action="store_true",
-        default=False,
-        help="Run git fetch before showing status",
-    )
     p_list.set_defaults(func=cmd_list)
 
-    p_run = sub.add_parser(
-        "run", aliases=["r"], help="Run fate on a single repository."
+    p_pull = sub.add_parser("pull", help="Run only the pull task on all repositories.")
+    p_pull.add_argument("directory", nargs="?", default=None)
+    p_pull.add_argument(
+        "-t",
+        "--throttle",
+        type=_parse_duration,
+        default=0.0,
+        metavar="DURATION",
+        help="delay between repos (e.g. 1s, 500ms, 2m)",
     )
-    p_run.add_argument("directory", nargs="?", default=None)
-    p_run.set_defaults(func=cmd_run)
+    p_pull.set_defaults(func=cmd_pull)
 
     p_gamble = sub.add_parser(
-        "gamble", aliases=["g"], help="Run fate on all repositories."
+        "gamble", aliases=["g"], help="Run all tasks except push on all repositories."
     )
     p_gamble.add_argument("directory", nargs="?", default=None)
     p_gamble.add_argument(
@@ -188,7 +236,56 @@ def main() -> None:
         metavar="DURATION",
         help="delay between repos (e.g. 1s, 500ms, 2m)",
     )
+    p_gamble.add_argument(
+        "--push",
+        action="store_true",
+        default=False,
+        help="Also run push (= multirun with no exclusions)",
+    )
     p_gamble.set_defaults(func=cmd_gamble)
+
+    p_push = sub.add_parser("push", help="Run only the push task on all repositories.")
+    p_push.add_argument("directory", nargs="?", default=None)
+    p_push.add_argument(
+        "-t",
+        "--throttle",
+        type=_parse_duration,
+        default=0.0,
+        metavar="DURATION",
+        help="delay between repos (e.g. 1s, 500ms, 2m)",
+    )
+    p_push.set_defaults(func=cmd_push)
+
+    p_multirun = sub.add_parser(
+        "multirun",
+        aliases=["m"],
+        help="Run all repositories with optional task filters.",
+    )
+    p_multirun.add_argument("directory", nargs="?", default=None)
+    p_multirun.add_argument(
+        "-t",
+        "--throttle",
+        type=_parse_duration,
+        default=0.0,
+        metavar="DURATION",
+        help="delay between repos (e.g. 1s, 500ms, 2m)",
+    )
+    p_multirun.add_argument(
+        "-o",
+        "--only",
+        action="append",
+        metavar="TASKS",
+        help="Only run these tasks, comma-separated (e.g. pull,push). Repeatable.",
+    )
+    p_multirun.add_argument(
+        "-e",
+        "--exclude",
+        action="append",
+        metavar="TASKS",
+        help="Skip these tasks, comma-separated. Repeatable.",
+    )
+    p_multirun.set_defaults(func=cmd_multirun)
+
     args = parser.parse_args()
     args.func(args)
 
