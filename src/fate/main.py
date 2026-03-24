@@ -56,14 +56,16 @@ def _run_all(
     blank_lines: bool = True,
     all_repos: bool = False,
     show_path: bool = False,
+    depth: int | None = None,
+    unrestricted: bool = False,
 ) -> None:
     if all_repos:
-        repos = iter_all_repos(target)
+        repos = iter_all_repos(target, depth=depth, unrestricted=unrestricted)
         if not repos:
             print(f"No git repositories found in {target}")
             return
     else:
-        repos = iter_repos(target)
+        repos = iter_repos(target, depth=depth, unrestricted=unrestricted)
         if not repos:
             print(f"No .faterc or faterc files found in {target}")
             return
@@ -120,6 +122,8 @@ def cmd_gamble(args: argparse.Namespace) -> None:
         delay=args.delay,
         all_repos=args.all,
         show_path=args.show_path,
+        depth=1 if args.toplevel else args.depth,
+        unrestricted=args.unrestricted,
     )
 
 
@@ -133,6 +137,8 @@ def cmd_list(args: argparse.Namespace) -> None:
         blank_lines=False,
         all_repos=args.all,
         show_path=args.show_path,
+        depth=1 if args.toplevel else args.depth,
+        unrestricted=args.unrestricted,
     )
 
 
@@ -145,6 +151,8 @@ def cmd_pull(args: argparse.Namespace) -> None:
         delay=args.delay,
         all_repos=args.all,
         show_path=args.show_path,
+        depth=1 if args.toplevel else args.depth,
+        unrestricted=args.unrestricted,
     )
 
 
@@ -157,6 +165,8 @@ def cmd_push(args: argparse.Namespace) -> None:
         delay=args.delay,
         all_repos=args.all,
         show_path=args.show_path,
+        depth=1 if args.toplevel else args.depth,
+        unrestricted=args.unrestricted,
     )
 
 
@@ -171,6 +181,8 @@ def cmd_multirun(args: argparse.Namespace) -> None:
         delay=args.delay,
         all_repos=args.all,
         show_path=args.show_path,
+        depth=1 if args.toplevel else args.depth,
+        unrestricted=args.unrestricted,
     )
 
 
@@ -288,6 +300,27 @@ def main() -> None:
         default=False,
         help="Show each repo's path relative to the search directory",
     )
+    p_list.add_argument(
+        "--depth",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Limit search to at most N directories deep",
+    )
+    p_list.add_argument(
+        "-t",
+        "--toplevel",
+        action="store_true",
+        default=False,
+        help="Only search one directory deep (equivalent to --depth 1)",
+    )
+    p_list.add_argument(
+        "-u",
+        "--unrestricted",
+        action="store_true",
+        default=False,
+        help="Also search inside hidden directories",
+    )
     p_list.set_defaults(func=cmd_list)
 
     p_pull = sub.add_parser("pull", help="Run only the pull task on all repositories.")
@@ -313,6 +346,27 @@ def main() -> None:
         action="store_true",
         default=False,
         help="Show each repo's path relative to the search directory",
+    )
+    p_pull.add_argument(
+        "--depth",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Limit search to at most N directories deep",
+    )
+    p_pull.add_argument(
+        "-t",
+        "--toplevel",
+        action="store_true",
+        default=False,
+        help="Only search one directory deep (equivalent to --depth 1)",
+    )
+    p_pull.add_argument(
+        "-u",
+        "--unrestricted",
+        action="store_true",
+        default=False,
+        help="Also search inside hidden directories",
     )
     p_pull.set_defaults(func=cmd_pull)
 
@@ -348,6 +402,27 @@ def main() -> None:
         default=False,
         help="Show each repo's path relative to the search directory",
     )
+    p_gamble.add_argument(
+        "--depth",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Limit search to at most N directories deep",
+    )
+    p_gamble.add_argument(
+        "-t",
+        "--toplevel",
+        action="store_true",
+        default=False,
+        help="Only search one directory deep (equivalent to --depth 1)",
+    )
+    p_gamble.add_argument(
+        "-u",
+        "--unrestricted",
+        action="store_true",
+        default=False,
+        help="Also search inside hidden directories",
+    )
     p_gamble.set_defaults(func=cmd_gamble)
 
     p_push = sub.add_parser("push", help="Run only the push task on all repositories.")
@@ -373,6 +448,27 @@ def main() -> None:
         action="store_true",
         default=False,
         help="Show each repo's path relative to the search directory",
+    )
+    p_push.add_argument(
+        "--depth",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Limit search to at most N directories deep",
+    )
+    p_push.add_argument(
+        "-t",
+        "--toplevel",
+        action="store_true",
+        default=False,
+        help="Only search one directory deep (equivalent to --depth 1)",
+    )
+    p_push.add_argument(
+        "-u",
+        "--unrestricted",
+        action="store_true",
+        default=False,
+        help="Also search inside hidden directories",
     )
     p_push.set_defaults(func=cmd_push)
 
@@ -417,6 +513,27 @@ def main() -> None:
         action="store_true",
         default=False,
         help="Show each repo's path relative to the search directory",
+    )
+    p_multirun.add_argument(
+        "--depth",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Limit search to at most N directories deep",
+    )
+    p_multirun.add_argument(
+        "-t",
+        "--toplevel",
+        action="store_true",
+        default=False,
+        help="Only search one directory deep (equivalent to --depth 1)",
+    )
+    p_multirun.add_argument(
+        "-u",
+        "--unrestricted",
+        action="store_true",
+        default=False,
+        help="Also search inside hidden directories",
     )
     p_multirun.set_defaults(func=cmd_multirun)
 

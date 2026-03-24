@@ -212,27 +212,38 @@ def run_repo(
             subprocess.run(["git", "checkout", orig], cwd=git_root, check=True)
 
 
-def _find_faterc_files(target: Path) -> list[Path]:
+def _find_faterc_files(
+    target: Path, depth: int | None = None, unrestricted: bool = False
+) -> list[Path]:
     fd = shutil.which("fdfind") or shutil.which("fd")
     if fd is not None:
-        result = subprocess.run(
-            [fd, "--unrestricted", "--type", "f", r"^\.?faterc$", str(target)],
-            capture_output=True,
-            text=True,
-        )
+        cmd = [fd, "--no-ignore-vcs"]
+        if unrestricted:
+            cmd.append("--hidden")
+        if depth is not None:
+            cmd.extend(["--max-depth", str(depth + 1)])
+        cmd.extend(["--type", "f", r"^\.?faterc$", str(target)])
+        result = subprocess.run(cmd, capture_output=True, text=True)
         return sorted(Path(p) for p in result.stdout.splitlines() if p)
     files = []
-    for dirpath, _, filenames in os.walk(target):
+    for dirpath, dirnames, filenames in os.walk(target):
+        current_depth = len(Path(dirpath).relative_to(target).parts)
+        if not unrestricted:
+            dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        if depth is not None and current_depth >= depth:
+            dirnames.clear()
         for name in (".faterc", "faterc"):
             if name in filenames:
                 files.append(Path(dirpath) / name)
     return sorted(files)
 
 
-def iter_repos(target: Path) -> list[RepoEntry]:
+def iter_repos(
+    target: Path, depth: int | None = None, unrestricted: bool = False
+) -> list[RepoEntry]:
     seen: set[Path] = set()
     repos = []
-    for faterc in _find_faterc_files(target):
+    for faterc in _find_faterc_files(target, depth=depth, unrestricted=unrestricted):
         parent = faterc.parent
         if parent not in seen:
             seen.add(parent)
@@ -240,25 +251,35 @@ def iter_repos(target: Path) -> list[RepoEntry]:
     return repos
 
 
-def _find_git_repos(target: Path) -> list[Path]:
+def _find_git_repos(
+    target: Path, depth: int | None = None, unrestricted: bool = False
+) -> list[Path]:
     """Find top-level git repository roots under (and including) target.
 
     Repos nested inside another git repo (submodules, vendored repos, etc.) are skipped.
     """
     fd = shutil.which("fdfind") or shutil.which("fd")
     if fd is not None:
-        result = subprocess.run(
-            [fd, "--unrestricted", "--type", "d", r"^\.git$", str(target)],
-            capture_output=True,
-            text=True,
-        )
+        cmd = [fd, "--no-ignore-vcs"]
+        if unrestricted:
+            cmd.append("--hidden")
+        if depth is not None:
+            cmd.extend(["--max-depth", str(depth + 1)])
+        cmd.extend(["--type", "d", r"^\.git$", str(target)])
+        result = subprocess.run(cmd, capture_output=True, text=True)
         candidates = sorted(Path(p).parent for p in result.stdout.splitlines() if p)
     else:
         candidates = []
         for dirpath, dirnames, _ in os.walk(target):
-            if ".git" in dirnames:
+            current_depth = len(Path(dirpath).relative_to(target).parts)
+            is_git_repo = ".git" in dirnames
+            if not unrestricted:
+                dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+            if is_git_repo:
                 candidates.append(Path(dirpath))
                 dirnames.clear()  # stop recursing into this repo entirely
+            elif depth is not None and current_depth >= depth:
+                dirnames.clear()
         candidates.sort()
 
     # Strip repos that are nested inside another found repo (needed for the fd path).
@@ -269,10 +290,15 @@ def _find_git_repos(target: Path) -> list[Path]:
     return top_level
 
 
-def iter_all_repos(target: Path) -> list[RepoEntry]:
+def iter_all_repos(
+    target: Path, depth: int | None = None, unrestricted: bool = False
+) -> list[RepoEntry]:
     """Return a RepoEntry for every git repo found under target."""
-    configured = {entry.path: entry for entry in iter_repos(target)}
+    configured = {
+        entry.path: entry
+        for entry in iter_repos(target, depth=depth, unrestricted=unrestricted)
+    }
     return [
         configured.get(repo, RepoEntry.unconfigured(repo))
-        for repo in _find_git_repos(target)
+        for repo in _find_git_repos(target, depth=depth, unrestricted=unrestricted)
     ]
