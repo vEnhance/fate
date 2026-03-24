@@ -60,15 +60,32 @@ The actions supported right now, if you have a clean working state:
 
 This recursively runs `fate run` on every directory under the specified one
 which has a `.faterc` file.
-By default it runs all enabled tasks; but you can also use `-o`/`--only`
-or `-e`/`--exclude` to restrict the list.
-Note that `fate` will never run a task not actually enabled in `.faterc`.
 
-You can add a delay between repositories with `-d`/`--delay` (e.g. `1s`, `500ms`, `2m`, or just `5` for 5 seconds).
+The following options can be used for multirun mode:
 
-You can also pass `-a`/`--all` so that discovered Git repositories,
-even if they don't have `.faterc` set up,
-will allow just `pull` and `push` actions.
+- By default `fate` runs all enabled tasks; but you can also use `-o`/`--only`
+  or `-e`/`--exclude` to restrict the list.
+  Note that `fate` will **never** run a task not actually enabled in `.faterc`.
+
+- You can add a delay between repositories with `-d`/`--delay`
+  (e.g. `1s`, `500ms`, `2m`, or just `5` for 5 seconds),
+  to throttle requests.
+
+- You can also pass `-a`/`--all` so that discovered Git repositories,
+  even if they don't have `.faterc` set up,
+  will allow just `pull` and `push` actions.
+
+- By default, hidden directories are not searched
+  (since `~/.cache` often has repositories, for example).
+  Pass `-u`/`--unrestricted` to search inside hidden directories too.
+
+- By default, the search is fully recursive.
+  Use `-t`/`--toplevel` to only look at the folders in the top level.
+  Use `--depth N` to more generally (so `-t` is the same as `--depth 1`).
+
+We recommend installing [fd](https://github.com/sharkdp/fd)
+for much faster search;
+`fate` otherwise falls back to `os.walk` (slower), and prints a warning.
 
 ### fate ls (or fate l, or fate list)
 
