@@ -64,7 +64,7 @@ By default it runs all enabled tasks; but you can also use `-o`/`--only`
 or `-e`/`--exclude` to restrict the list.
 Note that `fate` will never run a task not actually enabled in `.faterc`.
 
-You can throttle the run with `-t`/`--throttle` to sleep a bit between repositories.
+You can add a delay between repositories with `-d`/`--delay` (e.g. `1s`, `500ms`, `2m`, or just `5` for 5 seconds).
 
 You can also pass `-a`/`--all` so that discovered Git repositories,
 even if they don't have `.faterc` set up,

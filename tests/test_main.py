@@ -15,13 +15,16 @@ from fate.main import _parse_duration, _parse_tasks
         ("1.5s", 1.5),
         ("0ms", 0.0),
         ("90m", 5400.0),
+        ("1", 1.0),
+        ("5", 5.0),
+        ("2.5", 2.5),
     ],
 )
 def test_parse_duration_valid(s, expected):
     assert _parse_duration(s) == pytest.approx(expected)
 
 
-@pytest.mark.parametrize("s", ["", "abc", "1x", "1", "ms", "1 s", "1S"])
+@pytest.mark.parametrize("s", ["", "abc", "1x", "ms", "1 s", "1S"])
 def test_parse_duration_invalid(s):
     with pytest.raises(argparse.ArgumentTypeError):
         _parse_duration(s)

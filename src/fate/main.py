@@ -16,13 +16,16 @@ from fate.run import RepoEntry, find_faterc, iter_all_repos, iter_repos, run_rep
 
 
 def _parse_duration(s: str) -> float:
-    """Parse a duration string like '500ms', '1s', '2m', '1h' into seconds."""
-    m = re.fullmatch(r"(\d+(?:\.\d+)?)(ms|s|m|h)", s)
-    if not m:
+    """Parse a duration string like '500ms', '1s', '2m', '1h' into seconds.
+
+    If no unit is specified, seconds are assumed.
+    """
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)(ms|s|m|h)?", s)
+    if not m or not s:
         raise argparse.ArgumentTypeError(
-            f"Invalid duration {s!r}: Expected a number followed by ms, s, m, or h"
+            f"Invalid duration {s!r}: Expected a number optionally followed by ms, s, m, or h"
         )
-    value, unit = float(m.group(1)), m.group(2)
+    value, unit = float(m.group(1)), m.group(2) or "s"
     return value * {"ms": 0.001, "s": 1, "m": 60, "h": 3600}[unit]
 
 
@@ -49,7 +52,7 @@ def _run_all(
     target: Path,
     only: set[str] | None,
     exclude: set[str],
-    throttle: float = 0.0,
+    delay: float = 0.0,
     blank_lines: bool = True,
     all_repos: bool = False,
     show_path: bool = False,
@@ -67,8 +70,8 @@ def _run_all(
 
     prek_rev_cache: dict[str, str] = {}
     for i, entry in enumerate(repos):
-        if i > 0 and throttle:
-            time.sleep(throttle)
+        if i > 0 and delay:
+            time.sleep(delay)
         if i > 0 and blank_lines:
             print()
         try:
@@ -114,7 +117,7 @@ def cmd_gamble(args: argparse.Namespace) -> None:
         target,
         only=None,
         exclude=exclude,
-        throttle=args.throttle,
+        delay=args.delay,
         all_repos=args.all,
         show_path=args.show_path,
     )
@@ -126,7 +129,7 @@ def cmd_list(args: argparse.Namespace) -> None:
         target,
         only=set(),
         exclude=set(),
-        throttle=args.throttle,
+        delay=args.delay,
         blank_lines=False,
         all_repos=args.all,
         show_path=args.show_path,
@@ -139,7 +142,7 @@ def cmd_pull(args: argparse.Namespace) -> None:
         target,
         only={"pull"},
         exclude=set(),
-        throttle=args.throttle,
+        delay=args.delay,
         all_repos=args.all,
         show_path=args.show_path,
     )
@@ -151,7 +154,7 @@ def cmd_push(args: argparse.Namespace) -> None:
         target,
         only={"push"},
         exclude=set(),
-        throttle=args.throttle,
+        delay=args.delay,
         all_repos=args.all,
         show_path=args.show_path,
     )
@@ -165,7 +168,7 @@ def cmd_multirun(args: argparse.Namespace) -> None:
         target,
         only=only,
         exclude=exclude,
-        throttle=args.throttle,
+        delay=args.delay,
         all_repos=args.all,
         show_path=args.show_path,
     )
@@ -264,8 +267,8 @@ def main() -> None:
     )
     p_list.add_argument("directory", nargs="?", default=None)
     p_list.add_argument(
-        "-t",
-        "--throttle",
+        "-d",
+        "--delay",
         type=_parse_duration,
         default=0.0,
         metavar="DURATION",
@@ -290,8 +293,8 @@ def main() -> None:
     p_pull = sub.add_parser("pull", help="Run only the pull task on all repositories.")
     p_pull.add_argument("directory", nargs="?", default=None)
     p_pull.add_argument(
-        "-t",
-        "--throttle",
+        "-d",
+        "--delay",
         type=_parse_duration,
         default=0.0,
         metavar="DURATION",
@@ -318,8 +321,8 @@ def main() -> None:
     )
     p_gamble.add_argument("directory", nargs="?", default=None)
     p_gamble.add_argument(
-        "-t",
-        "--throttle",
+        "-d",
+        "--delay",
         type=_parse_duration,
         default=0.0,
         metavar="DURATION",
@@ -350,8 +353,8 @@ def main() -> None:
     p_push = sub.add_parser("push", help="Run only the push task on all repositories.")
     p_push.add_argument("directory", nargs="?", default=None)
     p_push.add_argument(
-        "-t",
-        "--throttle",
+        "-d",
+        "--delay",
         type=_parse_duration,
         default=0.0,
         metavar="DURATION",
@@ -380,8 +383,8 @@ def main() -> None:
     )
     p_multirun.add_argument("directory", nargs="?", default=None)
     p_multirun.add_argument(
-        "-t",
-        "--throttle",
+        "-d",
+        "--delay",
         type=_parse_duration,
         default=0.0,
         metavar="DURATION",
