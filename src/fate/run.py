@@ -212,26 +212,34 @@ def run_repo(
             subprocess.run(["git", "checkout", orig], cwd=git_root, check=True)
 
 
-def _fd_base(depth: int | None, unrestricted: bool) -> list[str] | None:
+def _fd_base(depth: int | None) -> list[str] | None:
     fd = shutil.which("fdfind") or shutil.which("fd")
     if fd is None:
         return None
-    cmd = [fd, "--no-ignore-vcs"]
-    if unrestricted:
-        cmd.append("--hidden")
+    # --hidden: needed so fd can find .faterc and .git (both start with '.')
+    # --no-ignore-vcs: don't let .gitignore hide repos from us
+    cmd = [fd, "--hidden", "--no-ignore-vcs"]
     if depth is not None:
         cmd.extend(["--max-depth", str(depth + 1)])
     return cmd
 
 
+def _in_hidden_dir(path: Path, target: Path) -> bool:
+    """Return True if any directory component between target and path starts with '.'."""
+    return any(part.startswith(".") for part in path.relative_to(target).parts[:-1])
+
+
 def _find_faterc_files(
     target: Path, depth: int | None = None, unrestricted: bool = False
 ) -> list[Path]:
-    cmd = _fd_base(depth, unrestricted)
+    cmd = _fd_base(depth)
     if cmd is not None:
         cmd.extend(["--type", "f", r"^\.?faterc$", str(target)])
         result = subprocess.run(cmd, capture_output=True, text=True)
-        return sorted(Path(p) for p in result.stdout.splitlines() if p)
+        paths = sorted(Path(p) for p in result.stdout.splitlines() if p)
+        if not unrestricted:
+            paths = [p for p in paths if not _in_hidden_dir(p, target)]
+        return paths
     files = []
     for dirpath, dirnames, filenames in os.walk(target):
         current_depth = len(Path(dirpath).relative_to(target).parts)
@@ -265,11 +273,14 @@ def _find_git_repos(
 
     Repos nested inside another git repo (submodules, vendored repos, etc.) are skipped.
     """
-    cmd = _fd_base(depth, unrestricted)
+    cmd = _fd_base(depth)
     if cmd is not None:
         cmd.extend(["--type", "d", r"^\.git$", str(target)])
         result = subprocess.run(cmd, capture_output=True, text=True)
-        candidates = sorted(Path(p).parent for p in result.stdout.splitlines() if p)
+        git_dirs = sorted(Path(p) for p in result.stdout.splitlines() if p)
+        if not unrestricted:
+            git_dirs = [p for p in git_dirs if not _in_hidden_dir(p, target)]
+        candidates = [p.parent for p in git_dirs]
     else:
         candidates = []
         for dirpath, dirnames, _ in os.walk(target):
