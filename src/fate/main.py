@@ -55,7 +55,6 @@ def _run_all(
     delay: float = 0.0,
     blank_lines: bool = True,
     all_repos: bool = False,
-    show_path: bool = False,
     depth: int | None = None,
     unrestricted: bool = False,
 ) -> None:
@@ -77,13 +76,11 @@ def _run_all(
         if i > 0 and blank_lines:
             print()
         try:
-            path_prefix = ""
-            if show_path:
-                try:
-                    parent = entry.path.relative_to(target).parent
-                    path_prefix = str(parent) + "/" if str(parent) != "." else ""
-                except ValueError:
-                    path_prefix = str(entry.path.parent) + "/"
+            try:
+                parent = entry.path.relative_to(target).parent
+                path_prefix = str(parent) + "/" if str(parent) != "." else ""
+            except ValueError:
+                path_prefix = str(entry.path.parent) + "/"
             if not print_repo_status(entry.path, path_prefix=path_prefix):
                 continue
             run_repo(entry, only=only, exclude=exclude, prek_rev_cache=prek_rev_cache)
@@ -210,26 +207,20 @@ def _add_multi_args(p: argparse.ArgumentParser) -> None:
         default=False,
         help="Include all git repos under the directory, even without .faterc",
     )
-    p.add_argument(
-        "-s",
-        "--show-path",
-        action="store_true",
-        default=False,
-        help="Show each repo's path relative to the search directory",
-    )
-    p.add_argument(
+    depth_group = p.add_mutually_exclusive_group()
+    depth_group.add_argument(
         "--depth",
         type=int,
         default=None,
         metavar="N",
-        help="Limit search to at most N directories deep",
+        help="Search at most N directories deep (default: 1)",
     )
-    p.add_argument(
-        "-t",
-        "--toplevel",
+    depth_group.add_argument(
+        "-r",
+        "--recursive",
         action="store_true",
         default=False,
-        help="Only search one directory deep (equivalent to --depth 1)",
+        help="Search recursively to any depth",
     )
     p.add_argument(
         "-u",
@@ -254,8 +245,7 @@ def _run_all_from_args(
         delay=args.delay,
         blank_lines=blank_lines,
         all_repos=args.all,
-        show_path=args.show_path,
-        depth=1 if args.toplevel else args.depth,
+        depth=None if args.recursive else (args.depth if args.depth is not None else 1),
         unrestricted=args.unrestricted,
     )
 

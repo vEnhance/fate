@@ -71,17 +71,16 @@ The following options can be used for multirun mode:
   (e.g. `1s`, `500ms`, `2m`, or just `5` for 5 seconds),
   to throttle requests.
 
-- You can also pass `-a`/`--all` so that discovered Git repositories,
-  even if they don't have `.faterc` set up,
-  will allow just `pull` and `push` actions.
+- Pass `-a`/`--all` to include discovered Git repositories that don't have `.faterc`,
+  allowing just `pull` and `push` on them.
 
-- By default, hidden directories are not searched
+- Hidden directories are not searched by default
   (since `~/.cache` often has repositories, for example).
   Pass `-u`/`--unrestricted` to search inside hidden directories too.
 
-- By default, the search is fully recursive.
-  Use `-t`/`--toplevel` to only look at the folders in the top level.
-  Use `--depth N` to more generally (so `-t` is the same as `--depth 1`).
+- By default, only repositories directly inside the target directory are found.
+  Use `-r`/`--recursive` to search to any depth, or `--depth N` to limit to N levels.
+  (`-r` and `--depth` are mutually exclusive.)
 
 We recommend installing [fd](https://github.com/sharkdp/fd)
 for much faster search;
@@ -98,8 +97,7 @@ Shows the status of each repository without running any tasks.
 We also have the following:
 
 - **fate pull**: equivalent to `fate multirun --only pull`
-- **fate gamble (or fate g)**:
-  equivalent to `fate multirun --exclude push`.
+- **fate gamble (or fate g)**: equivalent to `fate multirun --exclude push`.
 - **fate push**: equivalent to `fate multirun --only push`
 
 [fct]: https://puzzmon.world/rounds/fates_thread_casino
