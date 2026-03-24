@@ -212,16 +212,23 @@ def run_repo(
             subprocess.run(["git", "checkout", orig], cwd=git_root, check=True)
 
 
+def _fd_base(depth: int | None, unrestricted: bool) -> list[str] | None:
+    fd = shutil.which("fdfind") or shutil.which("fd")
+    if fd is None:
+        return None
+    cmd = [fd, "--no-ignore-vcs"]
+    if unrestricted:
+        cmd.append("--hidden")
+    if depth is not None:
+        cmd.extend(["--max-depth", str(depth + 1)])
+    return cmd
+
+
 def _find_faterc_files(
     target: Path, depth: int | None = None, unrestricted: bool = False
 ) -> list[Path]:
-    fd = shutil.which("fdfind") or shutil.which("fd")
-    if fd is not None:
-        cmd = [fd, "--no-ignore-vcs"]
-        if unrestricted:
-            cmd.append("--hidden")
-        if depth is not None:
-            cmd.extend(["--max-depth", str(depth + 1)])
+    cmd = _fd_base(depth, unrestricted)
+    if cmd is not None:
         cmd.extend(["--type", "f", r"^\.?faterc$", str(target)])
         result = subprocess.run(cmd, capture_output=True, text=True)
         return sorted(Path(p) for p in result.stdout.splitlines() if p)
@@ -258,13 +265,8 @@ def _find_git_repos(
 
     Repos nested inside another git repo (submodules, vendored repos, etc.) are skipped.
     """
-    fd = shutil.which("fdfind") or shutil.which("fd")
-    if fd is not None:
-        cmd = [fd, "--no-ignore-vcs"]
-        if unrestricted:
-            cmd.append("--hidden")
-        if depth is not None:
-            cmd.extend(["--max-depth", str(depth + 1)])
+    cmd = _fd_base(depth, unrestricted)
+    if cmd is not None:
         cmd.extend(["--type", "d", r"^\.git$", str(target)])
         result = subprocess.run(cmd, capture_output=True, text=True)
         candidates = sorted(Path(p).parent for p in result.stdout.splitlines() if p)

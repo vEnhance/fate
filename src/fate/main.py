@@ -113,77 +113,26 @@ def cmd_run(args: argparse.Namespace) -> None:
 
 
 def cmd_gamble(args: argparse.Namespace) -> None:
-    target = Path(args.directory).resolve() if args.directory else Path.cwd()
     exclude: set[str] = set() if args.push else {"push"}
-    _run_all(
-        target,
-        only=None,
-        exclude=exclude,
-        delay=args.delay,
-        all_repos=args.all,
-        show_path=args.show_path,
-        depth=1 if args.toplevel else args.depth,
-        unrestricted=args.unrestricted,
-    )
+    _run_all_from_args(args, only=None, exclude=exclude)
 
 
 def cmd_list(args: argparse.Namespace) -> None:
-    target = Path(args.directory).resolve() if args.directory else Path.cwd()
-    _run_all(
-        target,
-        only=set(),
-        exclude=set(),
-        delay=args.delay,
-        blank_lines=False,
-        all_repos=args.all,
-        show_path=args.show_path,
-        depth=1 if args.toplevel else args.depth,
-        unrestricted=args.unrestricted,
-    )
+    _run_all_from_args(args, only=set(), exclude=set(), blank_lines=False)
 
 
 def cmd_pull(args: argparse.Namespace) -> None:
-    target = Path(args.directory).resolve() if args.directory else Path.cwd()
-    _run_all(
-        target,
-        only={"pull"},
-        exclude=set(),
-        delay=args.delay,
-        all_repos=args.all,
-        show_path=args.show_path,
-        depth=1 if args.toplevel else args.depth,
-        unrestricted=args.unrestricted,
-    )
+    _run_all_from_args(args, only={"pull"}, exclude=set())
 
 
 def cmd_push(args: argparse.Namespace) -> None:
-    target = Path(args.directory).resolve() if args.directory else Path.cwd()
-    _run_all(
-        target,
-        only={"push"},
-        exclude=set(),
-        delay=args.delay,
-        all_repos=args.all,
-        show_path=args.show_path,
-        depth=1 if args.toplevel else args.depth,
-        unrestricted=args.unrestricted,
-    )
+    _run_all_from_args(args, only={"push"}, exclude=set())
 
 
 def cmd_multirun(args: argparse.Namespace) -> None:
-    target = Path(args.directory).resolve() if args.directory else Path.cwd()
     only = _parse_tasks(args.only)
     exclude = _parse_tasks(args.exclude) or set()
-    _run_all(
-        target,
-        only=only,
-        exclude=exclude,
-        delay=args.delay,
-        all_repos=args.all,
-        show_path=args.show_path,
-        depth=1 if args.toplevel else args.depth,
-        unrestricted=args.unrestricted,
-    )
+    _run_all_from_args(args, only=only, exclude=exclude)
 
 
 def cmd_init(args: argparse.Namespace) -> None:
@@ -243,6 +192,74 @@ def cmd_init(args: argparse.Namespace) -> None:
     print(f"created {faterc}")
 
 
+def _add_multi_args(p: argparse.ArgumentParser) -> None:
+    """Add the common arguments shared by all multi-repo subcommands."""
+    p.add_argument("directory", nargs="?", default=None)
+    p.add_argument(
+        "-d",
+        "--delay",
+        type=_parse_duration,
+        default=0.0,
+        metavar="DURATION",
+        help="Delay between repos (e.g. 1s, 500ms, 2m)",
+    )
+    p.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        default=False,
+        help="Include all git repos under the directory, even without .faterc",
+    )
+    p.add_argument(
+        "-s",
+        "--show-path",
+        action="store_true",
+        default=False,
+        help="Show each repo's path relative to the search directory",
+    )
+    p.add_argument(
+        "--depth",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Limit search to at most N directories deep",
+    )
+    p.add_argument(
+        "-t",
+        "--toplevel",
+        action="store_true",
+        default=False,
+        help="Only search one directory deep (equivalent to --depth 1)",
+    )
+    p.add_argument(
+        "-u",
+        "--unrestricted",
+        action="store_true",
+        default=False,
+        help="Also search inside hidden directories",
+    )
+
+
+def _run_all_from_args(
+    args: argparse.Namespace,
+    only: set[str] | None,
+    exclude: set[str],
+    blank_lines: bool = True,
+) -> None:
+    target = Path(args.directory).resolve() if args.directory else Path.cwd()
+    _run_all(
+        target,
+        only=only,
+        exclude=exclude,
+        delay=args.delay,
+        blank_lines=blank_lines,
+        all_repos=args.all,
+        show_path=args.show_path,
+        depth=1 if args.toplevel else args.depth,
+        unrestricted=args.unrestricted,
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="fate",
@@ -277,199 +294,27 @@ def main() -> None:
     p_list = sub.add_parser(
         "list", aliases=["l", "ls"], help="Show repo statuses without running."
     )
-    p_list.add_argument("directory", nargs="?", default=None)
-    p_list.add_argument(
-        "-d",
-        "--delay",
-        type=_parse_duration,
-        default=0.0,
-        metavar="DURATION",
-        help="Delay between repos (e.g. 1s, 500ms, 2m)",
-    )
-    p_list.add_argument(
-        "-a",
-        "--all",
-        action="store_true",
-        default=False,
-        help="Include all git repos under the directory, even without .faterc",
-    )
-    p_list.add_argument(
-        "-s",
-        "--show-path",
-        action="store_true",
-        default=False,
-        help="Show each repo's path relative to the search directory",
-    )
-    p_list.add_argument(
-        "--depth",
-        type=int,
-        default=None,
-        metavar="N",
-        help="Limit search to at most N directories deep",
-    )
-    p_list.add_argument(
-        "-t",
-        "--toplevel",
-        action="store_true",
-        default=False,
-        help="Only search one directory deep (equivalent to --depth 1)",
-    )
-    p_list.add_argument(
-        "-u",
-        "--unrestricted",
-        action="store_true",
-        default=False,
-        help="Also search inside hidden directories",
-    )
+    _add_multi_args(p_list)
     p_list.set_defaults(func=cmd_list)
 
     p_pull = sub.add_parser("pull", help="Run only the pull task on all repositories.")
-    p_pull.add_argument("directory", nargs="?", default=None)
-    p_pull.add_argument(
-        "-d",
-        "--delay",
-        type=_parse_duration,
-        default=0.0,
-        metavar="DURATION",
-        help="delay between repos (e.g. 1s, 500ms, 2m)",
-    )
-    p_pull.add_argument(
-        "-a",
-        "--all",
-        action="store_true",
-        default=False,
-        help="Include all git repos under the directory, even without .faterc",
-    )
-    p_pull.add_argument(
-        "-s",
-        "--show-path",
-        action="store_true",
-        default=False,
-        help="Show each repo's path relative to the search directory",
-    )
-    p_pull.add_argument(
-        "--depth",
-        type=int,
-        default=None,
-        metavar="N",
-        help="Limit search to at most N directories deep",
-    )
-    p_pull.add_argument(
-        "-t",
-        "--toplevel",
-        action="store_true",
-        default=False,
-        help="Only search one directory deep (equivalent to --depth 1)",
-    )
-    p_pull.add_argument(
-        "-u",
-        "--unrestricted",
-        action="store_true",
-        default=False,
-        help="Also search inside hidden directories",
-    )
+    _add_multi_args(p_pull)
     p_pull.set_defaults(func=cmd_pull)
 
     p_gamble = sub.add_parser(
         "gamble", aliases=["g"], help="Run all tasks except push on all repositories."
     )
-    p_gamble.add_argument("directory", nargs="?", default=None)
-    p_gamble.add_argument(
-        "-d",
-        "--delay",
-        type=_parse_duration,
-        default=0.0,
-        metavar="DURATION",
-        help="delay between repos (e.g. 1s, 500ms, 2m)",
-    )
+    _add_multi_args(p_gamble)
     p_gamble.add_argument(
         "--push",
         action="store_true",
         default=False,
         help="Also run push (= multirun with no exclusions), legacy option",
     )
-    p_gamble.add_argument(
-        "-a",
-        "--all",
-        action="store_true",
-        default=False,
-        help="Include all git repos under the directory, even without .faterc",
-    )
-    p_gamble.add_argument(
-        "-s",
-        "--show-path",
-        action="store_true",
-        default=False,
-        help="Show each repo's path relative to the search directory",
-    )
-    p_gamble.add_argument(
-        "--depth",
-        type=int,
-        default=None,
-        metavar="N",
-        help="Limit search to at most N directories deep",
-    )
-    p_gamble.add_argument(
-        "-t",
-        "--toplevel",
-        action="store_true",
-        default=False,
-        help="Only search one directory deep (equivalent to --depth 1)",
-    )
-    p_gamble.add_argument(
-        "-u",
-        "--unrestricted",
-        action="store_true",
-        default=False,
-        help="Also search inside hidden directories",
-    )
     p_gamble.set_defaults(func=cmd_gamble)
 
     p_push = sub.add_parser("push", help="Run only the push task on all repositories.")
-    p_push.add_argument("directory", nargs="?", default=None)
-    p_push.add_argument(
-        "-d",
-        "--delay",
-        type=_parse_duration,
-        default=0.0,
-        metavar="DURATION",
-        help="delay between repos (e.g. 1s, 500ms, 2m)",
-    )
-    p_push.add_argument(
-        "-a",
-        "--all",
-        action="store_true",
-        default=False,
-        help="Include all git repos under the directory, even without .faterc",
-    )
-    p_push.add_argument(
-        "-s",
-        "--show-path",
-        action="store_true",
-        default=False,
-        help="Show each repo's path relative to the search directory",
-    )
-    p_push.add_argument(
-        "--depth",
-        type=int,
-        default=None,
-        metavar="N",
-        help="Limit search to at most N directories deep",
-    )
-    p_push.add_argument(
-        "-t",
-        "--toplevel",
-        action="store_true",
-        default=False,
-        help="Only search one directory deep (equivalent to --depth 1)",
-    )
-    p_push.add_argument(
-        "-u",
-        "--unrestricted",
-        action="store_true",
-        default=False,
-        help="Also search inside hidden directories",
-    )
+    _add_multi_args(p_push)
     p_push.set_defaults(func=cmd_push)
 
     p_multirun = sub.add_parser(
@@ -477,15 +322,7 @@ def main() -> None:
         aliases=["m"],
         help="Run all repositories with optional task filters.",
     )
-    p_multirun.add_argument("directory", nargs="?", default=None)
-    p_multirun.add_argument(
-        "-d",
-        "--delay",
-        type=_parse_duration,
-        default=0.0,
-        metavar="DURATION",
-        help="delay between repos (e.g. 1s, 500ms, 2m)",
-    )
+    _add_multi_args(p_multirun)
     p_multirun.add_argument(
         "-o",
         "--only",
@@ -499,41 +336,6 @@ def main() -> None:
         action="append",
         metavar="TASKS",
         help="Skip these tasks, comma-separated. Repeatable.",
-    )
-    p_multirun.add_argument(
-        "-a",
-        "--all",
-        action="store_true",
-        default=False,
-        help="Include all git repos under the directory, even without .faterc",
-    )
-    p_multirun.add_argument(
-        "-s",
-        "--show-path",
-        action="store_true",
-        default=False,
-        help="Show each repo's path relative to the search directory",
-    )
-    p_multirun.add_argument(
-        "--depth",
-        type=int,
-        default=None,
-        metavar="N",
-        help="Limit search to at most N directories deep",
-    )
-    p_multirun.add_argument(
-        "-t",
-        "--toplevel",
-        action="store_true",
-        default=False,
-        help="Only search one directory deep (equivalent to --depth 1)",
-    )
-    p_multirun.add_argument(
-        "-u",
-        "--unrestricted",
-        action="store_true",
-        default=False,
-        help="Also search inside hidden directories",
     )
     p_multirun.set_defaults(func=cmd_multirun)
 
