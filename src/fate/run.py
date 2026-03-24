@@ -1,3 +1,4 @@
+import functools
 import os
 import shutil
 import subprocess
@@ -212,8 +213,20 @@ def run_repo(
             subprocess.run(["git", "checkout", orig], cwd=git_root, check=True)
 
 
-def _fd_base(depth: int | None) -> list[str] | None:
+@functools.cache
+def _find_fd() -> str | None:
     fd = shutil.which("fdfind") or shutil.which("fd")
+    if fd is None:
+        print(
+            "Warning: fd/fdfind not found, falling back to os.walk (slower). "
+            "Install fd for better performance.",
+            file=sys.stderr,
+        )
+    return fd
+
+
+def _fd_base(depth: int | None) -> list[str] | None:
+    fd = _find_fd()
     if fd is None:
         return None
     # --hidden: needed so fd can find .faterc and .git (both start with '.')
