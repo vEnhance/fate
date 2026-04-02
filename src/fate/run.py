@@ -153,7 +153,7 @@ def run_repo(
             )
             if uv_cfg.get("commit", True) and is_dirty(repo):
                 subprocess.run(
-                    ["git", "commit", "-am", "chore(deps): uv sync -U"],
+                    ["git", "commit", "-am", "chore(deps): uv sync --upgrade"],
                     cwd=git_root,
                     env=env,
                     check=True,
