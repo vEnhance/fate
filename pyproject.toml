@@ -9,7 +9,7 @@ description = "✨💖 Don't ask, just pull! 🎰🪙"
 readme = "README.md"
 requires-python = ">=3.13"
 authors = [{ name = "Evan Chen", email = "evan@evanchen.cc" }]
-license = { text = "MIT" }
+license = "MIT"
 urls = { repository = "https://github.com/vEnhance/fate" }
 
 dependencies = [
