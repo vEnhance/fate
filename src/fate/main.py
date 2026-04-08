@@ -11,6 +11,7 @@ import git
 import tomlkit
 import tomlkit.items
 
+from fate.color import colorize
 from fate.git_utils import find_git_root, has_upstream, print_repo_status
 from fate.run import RepoEntry, find_faterc, iter_all_repos, iter_repos, run_repo
 
@@ -72,6 +73,7 @@ def _run_all(
     prek_rev_cache: dict[str, str] = {}
     for i, entry in enumerate(repos):
         if i > 0 and delay:
+            print(colorize("37", f"Waiting {delay} seconds before the next repo..."))
             time.sleep(delay)
         if i > 0 and blank_lines:
             print()
