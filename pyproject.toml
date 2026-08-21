@@ -26,9 +26,7 @@ packages = ["src/fate"]
 
 [dependency-groups]
 dev = [
-    "codespell>=2.4.2",
     "prek>=0.3.6",
     "pytest>=9.0.2",
-    "ruff>=0.15.7",
     "ty>=0.0.24",
 ]
