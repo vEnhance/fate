@@ -128,6 +128,7 @@ def run_repo(
             result = subprocess.run(
                 ["git", "fetch", "origin", f"{branch}:{branch}"],
                 cwd=git_root,
+                check=True,
             )
             if result.returncode != 0:
                 # Diverged or no upstream; fall back to plain fetch.
@@ -248,7 +249,7 @@ def _find_faterc_files(
     cmd = _fd_base(depth)
     if cmd is not None:
         cmd.extend(["--type", "f", r"^\.?faterc$", str(target)])
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         paths = sorted(Path(p) for p in result.stdout.splitlines() if p)
         if not unrestricted:
             paths = [p for p in paths if not _in_hidden_dir(p, target)]
@@ -289,7 +290,7 @@ def _find_git_repos(
     cmd = _fd_base(depth)
     if cmd is not None:
         cmd.extend(["--type", "d", r"^\.git$", str(target)])
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         git_dirs = sorted(Path(p) for p in result.stdout.splitlines() if p)
         if not unrestricted:
             git_dirs = [p for p in git_dirs if not _in_hidden_dir(p, target)]
