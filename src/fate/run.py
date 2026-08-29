@@ -169,7 +169,7 @@ def run_repo(
             else:
                 before = prek_revs(prek_toml)
                 subprocess.run(
-                    ["prek", "auto-update"],
+                    ["prek", "update"],
                     cwd=git_root,
                     env=env,
                     check=True,
@@ -191,7 +191,7 @@ def run_repo(
                     print(colorize("32", "prek: all hooks up-to-date"))
             if prek_cfg.get("commit", True) and is_dirty(repo):
                 subprocess.run(
-                    ["git", "commit", "-am", "ci: prek auto-update"],
+                    ["git", "commit", "-am", "ci: prek update"],
                     cwd=git_root,
                     env=env,
                     check=True,

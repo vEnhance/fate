@@ -51,7 +51,7 @@ The actions supported right now, if you have a clean working state:
   If the working directory is dirty but there's a remote, runs `git fetch` instead.
 - `uv`: runs `uv sync --upgrade` in order to update `uv.lock`
   If the `commit` option is enabled, also git commit's the change.
-- `prek`: runs `prek auto-update` in order to update `prek.toml` hooks
+- `prek`: runs `prek update` in order to update `prek.toml` hooks
   If the `commit` option is enabled, also git commit's the change.
 - `push`: runs `git push` if there is a configured remote.
   If the `verify` option is turned off, adds `--no-verify`.
