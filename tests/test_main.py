@@ -108,6 +108,12 @@ def test_venv_setting_none(tmp_path):
 # --- init_repo ---
 
 
+@pytest.fixture(autouse=True)
+def no_active_venv(monkeypatch):
+    """The test suite itself runs inside a virtualenv; init_repo must not see it."""
+    monkeypatch.delenv("VIRTUAL_ENV", raising=False)
+
+
 def _config(faterc: Path) -> dict:
     with open(faterc, "rb") as f:
         return tomllib.load(f)
@@ -154,11 +160,17 @@ def test_init_repo_uv_disabled_without_venv(repo):
     assert "venv" not in data["config"]
 
 
-def test_init_repo_ignores_ambient_virtualenv(repo, monkeypatch, tmp_path):
-    """A caller that doesn't pass active_venv must not pick up the shell's."""
-    monkeypatch.setenv("VIRTUAL_ENV", str(tmp_path / "elsewhere"))
+def test_init_repo_records_active_virtualenv(repo, monkeypatch, tmp_path):
+    home = tmp_path.parent / f"{tmp_path.name}-home"
+    monkeypatch.setenv("HOME", str(home))
+    venv = home / ".venvs" / "myenv"
+    venv.mkdir(parents=True)
+    monkeypatch.setenv("VIRTUAL_ENV", str(venv))
     root = Path(repo.working_tree_dir)
-    assert "venv" not in _config(init_repo(root))["config"]
+    (root / "uv.lock").write_text("")
+    data = _config(init_repo(root))
+    assert data["config"]["venv"] == "~/.venvs/myenv"
+    assert data["actions"]["uv"]["enabled"] is True
 
 
 def test_init_repo_rejects_non_repo(tmp_path):

@@ -58,10 +58,8 @@ and makes no network queries.
 fate seek ~
 ```
 
-Pass `--init` to run `fate init` on everything it finds.
-Unlike a bare `fate init`, this ignores whatever virtualenv is active in your
-shell (it belongs to wherever you ran `seek` from, not to the repositories it
-turned up), and records `venv = ".venv"` only where the repository has one.
+It only lists; `cd` into the ones you want and run `fate init` there,
+so that `fate` sees the virtualenv your shell activates for that repository.
 
 ### fate run (or fate r)
 

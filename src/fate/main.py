@@ -155,9 +155,7 @@ def _venv_setting(directory: Path, active_venv: str | None) -> str | None:
     return None
 
 
-def init_repo(
-    directory: Path, visible: bool = False, active_venv: str | None = None
-) -> Path:
+def init_repo(directory: Path, visible: bool = False) -> Path:
     """Write a faterc for the repository at directory and return its path.
 
     Raises ValueError if directory isn't a git repository root, or already has one.
@@ -175,7 +173,7 @@ def init_repo(
     has_uv = (directory / "uv.lock").exists()
     has_prek = (directory / "prek.toml").exists()
     remote_configured = has_upstream(repo)
-    venv = _venv_setting(directory, active_venv)
+    venv = _venv_setting(directory, os.environ.get("VIRTUAL_ENV"))
 
     def inline(**kwargs) -> tomlkit.items.InlineTable:
         t = tomlkit.inline_table()
@@ -207,11 +205,7 @@ def init_repo(
 def cmd_init(args: argparse.Namespace) -> None:
     directory = Path(args.directory).resolve() if args.directory else Path.cwd()
     try:
-        faterc = init_repo(
-            directory,
-            visible=args.visible,
-            active_venv=os.environ.get("VIRTUAL_ENV"),
-        )
+        faterc = init_repo(directory, visible=args.visible)
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -233,18 +227,8 @@ def cmd_seek(args: argparse.Namespace) -> None:
         except ValueError:
             label = str(repo)
         print(f"{colorize('1;34', label)} {colorize('37', ', '.join(markers))}")
-        if not args.init:
-            continue
-        # No active_venv: the shell's virtualenv belongs to wherever you ran seek
-        # from, not to the repos it happens to find.
-        try:
-            print(f"  created {init_repo(repo).name}")
-        except ValueError as e:
-            print(f"  Error: {e}", file=sys.stderr)
-
-    if not args.init:
-        print()
-        print(f"Run {colorize('1;32', 'fate init DIRECTORY')} on any of these.")
+    print()
+    print(f"Run {colorize('1;32', 'fate init')} in each one you want.")
 
 
 def _add_multi_args(p: argparse.ArgumentParser) -> None:
@@ -323,7 +307,7 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_init = sub.add_parser(
-        "init", aliases=["i"], help="Initialize .faterc in the current directory."
+        "init", aliases=["i"], help="Initialize .faterc in a git repository."
     )
     p_init.add_argument("directory", nargs="?", default=None)
     p_init.add_argument(
@@ -400,12 +384,6 @@ def main() -> None:
         default=None,
         metavar="N",
         help="Search at most N directories deep (default: unlimited)",
-    )
-    p_seek.add_argument(
-        "--init",
-        action="store_true",
-        default=False,
-        help="Also run fate init on every repository found",
     )
     p_seek.add_argument(
         "-u",
