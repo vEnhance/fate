@@ -45,21 +45,12 @@ push = {enabled = true, verify = true}
 
 ### fate seek (or fate s)
 
-Looks for Git repositories that ought to have a `.faterc` but don't:
-that is, repositories whose root has a `uv.lock` or `prek.toml`.
-Without a `.faterc`, `fate multirun --all` can only `pull` and `push` such a
-repository, so these are exactly the ones where `fate init` unlocks something.
-
-It searches to any depth by default (use `--depth N` to limit it),
-skips hidden directories unless you pass `-u`/`--unrestricted`,
-and makes no network queries.
+Search for Git repositories that could benefit from `fate init`
+(meaning there is either a `uv.lock` or `prek.toml`).
 
 ```bash
-fate seek ~
+fate seek
 ```
-
-It only lists; `cd` into the ones you want and run `fate init` there,
-so that `fate` sees the virtualenv your shell activates for that repository.
 
 ### fate run (or fate r)
 
