@@ -11,7 +11,13 @@ import git
 
 from fate.color import colorize
 from fate.git_utils import current_branch, is_dirty
-from fate.prek import prek_revs, prek_up_to_date, prek_update_cache
+from fate.prek import (
+    prek_revs,
+    prek_up_to_date,
+    prek_update_cache,
+    uv_export_command,
+    uv_export_output,
+)
 
 
 @dataclass
@@ -68,6 +74,83 @@ def venv_env(venv: str, repo_root: Path) -> dict[str, str]:
     env["PATH"] = str(venv_path / "bin") + os.pathsep + env.get("PATH", "")
     env["UV_PROJECT_ENVIRONMENT"] = str(venv_path)
     return env
+
+
+def uv_export(git_root: Path, env: dict[str, str]) -> None:
+    """Refresh the exported requirements file, if a uv-export hook would demand one."""
+    prek_toml = git_root / "prek.toml"
+    if not prek_toml.exists():
+        return
+    command = uv_export_command(prek_toml)
+    if command is None or not (git_root / uv_export_output(command)).exists():
+        return
+    print(colorize("32", f"uv: {' '.join(command)}"))
+    subprocess.run(command, cwd=git_root, env=env, check=True)
+
+
+def prek_run_all_files(git_root: Path, env: dict[str, str], repo: git.Repo) -> bool:
+    """Run every hook, retrying once if the first pass auto-fixed files.
+
+    Returns True if the hooks end up passing.
+    """
+
+    def hooks_pass() -> bool:
+        result = subprocess.run(
+            ["prek", "run", "--all-files"], cwd=git_root, env=env, check=False
+        )
+        return result.returncode == 0
+
+    print(colorize("32", "prek: running updated hooks on all files"))
+    before = repo.git.status("--porcelain")
+    if hooks_pass():
+        return True
+    if repo.git.status("--porcelain") == before:
+        return False
+    print(colorize("33", "prek: retrying after auto-fixes"))
+    return hooks_pass()
+
+
+def prek_task(
+    git_root: Path,
+    env: dict[str, str],
+    repo: git.Repo,
+    cfg: dict,
+    rev_cache: dict[str, str] | None,
+) -> bool:
+    """Update prek hooks and commit the result. False if manual fixes are needed."""
+    prek_toml = git_root / "prek.toml"
+    if rev_cache is not None and prek_up_to_date(prek_toml, rev_cache):
+        print(colorize("32", "prek: all hooks up-to-date (cached)"))
+    else:
+        before = prek_revs(prek_toml)
+        subprocess.run(
+            ["prek", "update"],
+            cwd=git_root,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+        after = prek_revs(prek_toml)
+        if rev_cache is not None:
+            prek_update_cache(prek_toml, rev_cache)
+        updated = {url for url, rev in after.items() if before.get(url) != rev}
+        if updated:
+            for url in sorted(updated):
+                print(
+                    colorize("1;32", f"prek: {url}: {before.get(url)} -> {after[url]}")
+                )
+            if not prek_run_all_files(git_root, env, repo):
+                return False
+        else:
+            print(colorize("32", "prek: all hooks up-to-date"))
+    if cfg.get("commit", True) and is_dirty(repo):
+        subprocess.run(
+            ["git", "commit", "-am", "ci: prek update"],
+            cwd=git_root,
+            env=env,
+            check=True,
+        )
+    return True
 
 
 def run_repo(
@@ -141,6 +224,7 @@ def run_repo(
     if orig != branch:
         subprocess.run(["git", "checkout", branch], cwd=git_root, check=True)
 
+    needs_attention = False
     try:
         if pull_active:
             subprocess.run(["git", "pull"], cwd=git_root, check=True)
@@ -152,6 +236,7 @@ def run_repo(
             subprocess.run(
                 ["uv", "sync", "--upgrade"], cwd=git_root, env=env, check=True
             )
+            uv_export(git_root, env)
             if uv_cfg.get("commit", True) and is_dirty(repo):
                 subprocess.run(
                     ["git", "commit", "-am", "chore(deps): uv sync --upgrade"],
@@ -160,46 +245,20 @@ def run_repo(
                     check=True,
                 )
 
-        prek_cfg = entry.actions.get("prek", {})
-        if prek_active:
-            prek_toml = git_root / "prek.toml"
-            if prek_rev_cache is not None and prek_up_to_date(
-                prek_toml, prek_rev_cache
-            ):
-                print(colorize("32", "prek: all hooks up-to-date (cached)"))
-            else:
-                before = prek_revs(prek_toml)
-                subprocess.run(
-                    ["prek", "update"],
-                    cwd=git_root,
-                    env=env,
-                    check=True,
-                    capture_output=True,
+        if prek_active and not prek_task(
+            git_root, env, repo, entry.actions.get("prek", {}), prek_rev_cache
+        ):
+            print(
+                colorize(
+                    "1;31",
+                    f"{git_root}: prek hooks still failing after auto-fixes, "
+                    "leaving the repo for manual intervention",
                 )
-                after = prek_revs(prek_toml)
-                if prek_rev_cache is not None:
-                    prek_update_cache(prek_toml, prek_rev_cache)
-                updated = {url for url, rev in after.items() if before.get(url) != rev}
-                if updated:
-                    for url in sorted(updated):
-                        print(
-                            colorize(
-                                "1;32",
-                                f"prek: {url}: {before.get(url)} -> {after[url]}",
-                            )
-                        )
-                else:
-                    print(colorize("32", "prek: all hooks up-to-date"))
-            if prek_cfg.get("commit", True) and is_dirty(repo):
-                subprocess.run(
-                    ["git", "commit", "-am", "ci: prek update"],
-                    cwd=git_root,
-                    env=env,
-                    check=True,
-                )
+            )
+            needs_attention = True
 
         push_cfg = entry.actions.get("push", {})
-        if push_active:
+        if push_active and not needs_attention:
             try:
                 ahead = int(repo.git.rev_list("--count", "@{u}..HEAD"))
             except git.GitCommandError:
@@ -211,7 +270,10 @@ def run_repo(
                 subprocess.run(push_args, cwd=git_root, env=env, check=True)
     finally:
         if orig and orig != branch:
-            subprocess.run(["git", "checkout", orig], cwd=git_root, check=True)
+            if needs_attention:
+                print(colorize("1;33", f"{git_root}: staying on branch {branch}"))
+            else:
+                subprocess.run(["git", "checkout", orig], cwd=git_root, check=True)
 
 
 @functools.cache

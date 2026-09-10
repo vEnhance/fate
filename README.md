@@ -45,14 +45,16 @@ push = {enabled = true, verify = true}
 ### fate run (or fate r)
 
 Once a directory has `.faterc` set up, you can use `fate run`.
-The actions supported right now, if you have a clean working state:
+The actions supported right now, if you have a clean working state,
+run in the order listed:
 
 - `pull`: runs `git pull` if there is a configured remote and clean workdir.
   If the working directory is dirty but there's a remote, runs `git fetch` instead.
 - `uv`: runs `uv sync --upgrade` in order to update `uv.lock`
-  If the `commit` option is enabled, also git commit's the change.
-- `prek`: runs `prek update` in order to update `prek.toml` hooks
-  If the `commit` option is enabled, also git commit's the change.
+  If `prek.toml` declares a `uv-export` hook, also runs that.
+- `prek`: runs `prek update` in order to update `prek.toml` hooks.
+  If updated, run `prek run --all-files` to catch new errors.
+  Attempts autofixes, but this can fail.
 - `push`: runs `git push` if there is a configured remote.
   If the `verify` option is turned off, adds `--no-verify`.
 
