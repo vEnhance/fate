@@ -307,9 +307,7 @@ def main() -> None:
     p_pull.set_defaults(func=cmd_pull)
 
     p_gamble = sub.add_parser(
-        "gamble",
-        aliases=["g", "m", "multirun"],
-        help="Run all tasks except push on all repositories.",
+        "gamble", aliases=["g"], help="Run all tasks except push on all repositories."
     )
     _add_multi_args(p_gamble)
     p_gamble.set_defaults(func=cmd_gamble)

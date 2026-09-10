@@ -68,7 +68,7 @@ run in the order listed:
   If the `verify` option is turned off, adds `--no-verify`.
   Only `fate push` ever runs this task; `fate run` and `fate gamble` skip it.
 
-### fate gamble (or fate g, or fate m, or fate multirun)
+### fate gamble (or fate g)
 
 This recursively runs `fate run` on every directory under the specified one
 which has a `.faterc` file.
