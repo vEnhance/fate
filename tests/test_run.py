@@ -7,6 +7,7 @@ from fate.run import (
     RepoEntry,
     _find_faterc_files,
     _find_git_repos,
+    base_env,
     find_faterc,
     iter_all_repos,
     iter_repos,
@@ -39,7 +40,22 @@ def test_find_faterc_none(tmp_path):
     assert find_faterc(tmp_path) is None
 
 
-# --- venv_env ---
+# --- base_env / venv_env ---
+
+
+def test_base_env_sets_prek_quiet(monkeypatch):
+    monkeypatch.delenv("PREK_QUIET", raising=False)
+    assert base_env()["PREK_QUIET"] == "1"
+
+
+def test_base_env_respects_existing_prek_quiet(monkeypatch):
+    monkeypatch.setenv("PREK_QUIET", "0")
+    assert base_env()["PREK_QUIET"] == "0"
+
+
+def test_venv_env_sets_prek_quiet(tmp_path, monkeypatch):
+    monkeypatch.delenv("PREK_QUIET", raising=False)
+    assert venv_env(str(tmp_path), tmp_path)["PREK_QUIET"] == "1"
 
 
 def test_venv_env_absolute(tmp_path):

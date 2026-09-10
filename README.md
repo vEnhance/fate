@@ -67,6 +67,10 @@ run in the order listed:
 - `push`: runs `git push` if there is a configured remote.
   If the `verify` option is turned off, adds `--no-verify`.
 
+Every subprocess runs with `PREK_QUIET=1` so that `prek`, whether invoked
+directly or from a git hook, only reports what actually needs attention.
+Set `PREK_QUIET` yourself to override it.
+
 ### fate multirun (or fate m)
 
 This recursively runs `fate run` on every directory under the specified one
