@@ -51,19 +51,10 @@ run in the order listed:
 - `pull`: runs `git pull` if there is a configured remote and clean workdir.
   If the working directory is dirty but there's a remote, runs `git fetch` instead.
 - `uv`: runs `uv sync --upgrade` in order to update `uv.lock`
-  If `prek.toml` declares a `uv-export` hook and the file it exports to
-  (usually `requirements.txt`) is present, that export is run too,
-  so the commit doesn't immediately trip the hook.
-  If the `commit` option is enabled, also git commit's the change.
-- `prek`: runs `prek update` in order to update `prek.toml` hooks
-  If any hook was updated, `prek run --all-files` is then run to check
-  that the new versions are happy with the repository.
-  Hooks that fix things themselves are run a second time,
-  and their fixes are included in the commit.
-  If the hooks still fail after that, a manual fix is needed:
-  `fate` prints a warning and leaves the repository as-is for you,
-  skipping the commit and any subsequent push.
-  If the `commit` option is enabled, also git commit's the change.
+  If `prek.toml` declares a `uv-export` hook, also runs that.
+- `prek`: runs `prek update` in order to update `prek.toml` hooks.
+  If updated, run `prek run --all-files` to catch new errors.
+  Attempts autofixes, but this can fail.
 - `push`: runs `git push` if there is a configured remote.
   If the `verify` option is turned off, adds `--no-verify`.
 
