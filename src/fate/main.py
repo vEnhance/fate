@@ -13,7 +13,14 @@ import tomlkit.items
 
 from fate.color import colorize
 from fate.git_utils import find_git_root, has_upstream, print_repo_status
-from fate.run import RepoEntry, find_faterc, iter_all_repos, iter_repos, run_repo
+from fate.run import (
+    RepoEntry,
+    find_faterc,
+    iter_all_repos,
+    iter_repos,
+    iter_uninitialized_repos,
+    run_repo,
+)
 
 
 def _parse_duration(s: str) -> float:
@@ -134,35 +141,39 @@ def cmd_multirun(args: argparse.Namespace) -> None:
     _run_all_from_args(args, only=only, exclude=exclude)
 
 
-def cmd_init(args: argparse.Namespace) -> None:
-    cwd = Path.cwd()
+def _venv_setting(directory: Path, active_venv: str | None) -> str | None:
+    """Pick the venv to record: the active virtualenv, else an in-tree .venv."""
+    if active_venv:
+        venv = Path(active_venv).resolve()
+        if venv.is_relative_to(directory):
+            return str(venv.relative_to(directory))
+        if venv.is_relative_to(Path.home()):
+            return f"~/{venv.relative_to(Path.home())}"
+        return str(venv)
+    if (directory / ".venv").is_dir():
+        return ".venv"
+    return None
 
-    if not (cwd / ".git").exists():
-        print("Error: not at the root of a git repository", file=sys.stderr)
-        sys.exit(1)
 
-    if find_faterc(cwd) is not None:
-        print("Error: .faterc or faterc already exists", file=sys.stderr)
-        sys.exit(1)
-    faterc = cwd / ("faterc" if args.visible else ".faterc")
+def init_repo(directory: Path, visible: bool = False) -> Path:
+    """Write a faterc for the repository at directory and return its path.
 
-    has_uv = (cwd / "uv.lock").exists()
-    has_prek = (cwd / "prek.toml").exists()
+    Raises ValueError if directory isn't a git repository root, or already has one.
+    """
+    if not (directory / ".git").exists():
+        raise ValueError(f"{directory} is not the root of a git repository")
+    if find_faterc(directory) is not None:
+        raise ValueError(f".faterc or faterc already exists in {directory}")
+    try:
+        repo = git.Repo(directory)
+    except git.InvalidGitRepositoryError:
+        raise ValueError(f"{directory} is not a valid git repository") from None
 
-    repo = git.Repo(cwd)
+    faterc = directory / ("faterc" if visible else ".faterc")
+    has_uv = (directory / "uv.lock").exists()
+    has_prek = (directory / "prek.toml").exists()
     remote_configured = has_upstream(repo)
-
-    venv_val = None
-    active = os.environ.get("VIRTUAL_ENV")
-    if active:
-        vp = Path(active).resolve()
-        try:
-            venv_val = str(vp.relative_to(cwd))
-        except ValueError:
-            try:
-                venv_val = f"~/{vp.relative_to(Path.home())}"
-            except ValueError:
-                venv_val = str(vp)
+    venv = _venv_setting(directory, os.environ.get("VIRTUAL_ENV"))
 
     def inline(**kwargs) -> tomlkit.items.InlineTable:
         t = tomlkit.inline_table()
@@ -173,22 +184,51 @@ def cmd_init(args: argparse.Namespace) -> None:
     doc = tomlkit.document()
     config = tomlkit.table()
     config.add("branch", "main")
-    if venv_val is not None:
-        config.add("venv", venv_val)
+    if venv is not None:
+        config.add("venv", venv)
     doc.add("config", config)
     doc.add(tomlkit.nl())
 
     actions = tomlkit.table()
     actions.add("pull", inline(enabled=remote_configured))
     if has_uv:
-        actions.add("uv", inline(enabled=venv_val is not None, commit=True))
+        actions.add("uv", inline(enabled=venv is not None, commit=True))
     if has_prek:
         actions.add("prek", inline(enabled=True, commit=True))
     actions.add("push", inline(enabled=remote_configured, verify=True))
     doc.add("actions", actions)
 
     faterc.write_text(tomlkit.dumps(doc))
+    return faterc
+
+
+def cmd_init(args: argparse.Namespace) -> None:
+    directory = Path(args.directory).resolve() if args.directory else Path.cwd()
+    try:
+        faterc = init_repo(directory, visible=args.visible)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
     print(f"created {faterc}")
+
+
+def cmd_seek(args: argparse.Namespace) -> None:
+    target = Path(args.directory).resolve() if args.directory else Path.cwd()
+    found = iter_uninitialized_repos(
+        target, depth=args.depth, unrestricted=args.unrestricted
+    )
+    if not found:
+        print(f"Nothing to initialize in {target}")
+        return
+
+    for repo, markers in found:
+        try:
+            label = str(repo.relative_to(target))
+        except ValueError:
+            label = str(repo)
+        print(f"{colorize('1;34', label)} {colorize('37', ', '.join(markers))}")
+    print()
+    print(f"Run {colorize('1;32', 'fate init')} in each one you want.")
 
 
 def _add_multi_args(p: argparse.ArgumentParser) -> None:
@@ -267,8 +307,9 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_init = sub.add_parser(
-        "init", aliases=["i"], help="Initialize .faterc in the current directory."
+        "init", aliases=["i"], help="Initialize .faterc in a git repository."
     )
+    p_init.add_argument("directory", nargs="?", default=None)
     p_init.add_argument(
         "--visible",
         action="store_true",
@@ -330,6 +371,28 @@ def main() -> None:
         help="Skip these tasks, comma-separated. Repeatable.",
     )
     p_multirun.set_defaults(func=cmd_multirun)
+
+    p_seek = sub.add_parser(
+        "seek",
+        aliases=["s"],
+        help="Find git repositories that look like they want a .faterc.",
+    )
+    p_seek.add_argument("directory", nargs="?", default=None)
+    p_seek.add_argument(
+        "--depth",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Search at most N directories deep (default: unlimited)",
+    )
+    p_seek.add_argument(
+        "-u",
+        "--unrestricted",
+        action="store_true",
+        default=False,
+        help="Also search inside hidden directories",
+    )
+    p_seek.set_defaults(func=cmd_seek)
 
     args = parser.parse_args()
     args.func(args)

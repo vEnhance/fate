@@ -42,6 +42,15 @@ prek = {enabled = true, commit = true}
 push = {enabled = true, verify = true}
 ```
 
+### fate seek (or fate s)
+
+Search for Git repositories that could benefit from `fate init`
+(meaning there is either a `uv.lock` or `prek.toml`).
+
+```bash
+fate seek
+```
+
 ### fate run (or fate r)
 
 Once a directory has `.faterc` set up, you can use `fate run`.
