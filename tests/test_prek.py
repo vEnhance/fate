@@ -1,6 +1,12 @@
 import pytest
 
-from fate.prek import prek_revs, prek_up_to_date, prek_update_cache
+from fate.prek import (
+    prek_revs,
+    prek_up_to_date,
+    prek_update_cache,
+    uv_export_command,
+    uv_export_output,
+)
 
 SAMPLE = """\
 [[repos]]
@@ -100,3 +106,61 @@ def test_prek_update_cache_overwrites(prek_toml):
     cache = {"https://github.com/astral-sh/ruff-pre-commit": "v0.14.0"}
     prek_update_cache(prek_toml, cache)
     assert cache["https://github.com/astral-sh/ruff-pre-commit"] == "v0.15.7"
+
+
+# --- uv_export_command / uv_export_output ---
+
+UV_EXPORT = """\
+[[repos]]
+repo = "https://github.com/astral-sh/uv-pre-commit"
+rev = "0.12.7"
+hooks = [{ id = "uv-lock" }, { id = "uv-export" }]
+"""
+
+UV_EXPORT_ARGS = """\
+[[repos]]
+repo = "https://github.com/astral-sh/uv-pre-commit"
+rev = "0.12.7"
+hooks = [
+  { id = "uv-export", args = ["--no-dev", "--output-file=reqs/base.txt"] },
+]
+"""
+
+
+def test_uv_export_command_default_args(tmp_path):
+    p = tmp_path / "prek.toml"
+    p.write_text(UV_EXPORT)
+    assert uv_export_command(p) == [
+        "uv",
+        "export",
+        "--frozen",
+        "--output-file=requirements.txt",
+        "--quiet",
+    ]
+
+
+def test_uv_export_command_custom_args(tmp_path):
+    p = tmp_path / "prek.toml"
+    p.write_text(UV_EXPORT_ARGS)
+    assert uv_export_command(p) == [
+        "uv",
+        "export",
+        "--no-dev",
+        "--output-file=reqs/base.txt",
+    ]
+
+
+def test_uv_export_command_absent(prek_toml):
+    assert uv_export_command(prek_toml) is None
+
+
+def test_uv_export_output_default():
+    assert uv_export_output(["uv", "export", "--frozen"]) == "requirements.txt"
+
+
+def test_uv_export_output_equals_form():
+    assert uv_export_output(["uv", "export", "--output-file=reqs.txt"]) == "reqs.txt"
+
+
+def test_uv_export_output_separate_arg():
+    assert uv_export_output(["uv", "export", "-o", "reqs.txt"]) == "reqs.txt"

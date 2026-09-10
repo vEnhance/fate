@@ -455,3 +455,226 @@ def test_unconfigured_exclude_push_only_pulls(repo, mock_subprocess, monkeypatch
     cmd_strs = [" ".join(c) for c in mock_subprocess]
     assert any("pull" in s for s in cmd_strs)
     assert not any("push" in s for s in cmd_strs)
+
+
+# --- uv export / prek update integration ---
+
+PREK_BEFORE = """\
+[[repos]]
+repo = "https://github.com/astral-sh/ruff-pre-commit"
+rev = "v0.15.7"
+hooks = [{ id = "ruff-check" }]
+"""
+
+PREK_AFTER = PREK_BEFORE.replace("v0.15.7", "v0.16.5")
+
+PREK_WITH_UV_EXPORT = (
+    PREK_BEFORE
+    + """
+[[repos]]
+repo = "https://github.com/astral-sh/uv-pre-commit"
+rev = "0.12.7"
+hooks = [{ id = "uv-export" }]
+"""
+)
+
+UV_EXPORT_CMD = (
+    "uv",
+    "export",
+    "--frozen",
+    "--output-file=requirements.txt",
+    "--quiet",
+)
+
+
+def _write_task_faterc(path: Path, *, uv=False, prek=False, push=False) -> RepoEntry:
+    lines = ['[config]\nbranch = "main"\nvenv = ".venv"\n\n[actions]\n']
+    if uv:
+        lines.append("uv = { enabled = true, commit = true }\n")
+    if prek:
+        lines.append("prek = { enabled = true, commit = true }\n")
+    if push:
+        lines.append("push = { enabled = true, verify = true }\n")
+    faterc = path / ".faterc"
+    faterc.write_text("".join(lines))
+    return RepoEntry.from_faterc(path, faterc)
+
+
+def _commit_files(repo, root: Path, files: dict[str, str]) -> None:
+    for name, text in files.items():
+        (root / name).write_text(text)
+    repo.index.add(list(files))
+    repo.index.commit("add fixtures")
+
+
+def _fake_run(calls: list, on_call=None):
+    def _run(args, **kwargs):
+        args = list(args)
+        calls.append(args)
+        m = MagicMock()
+        m.returncode = on_call(args) if on_call is not None else 0
+        return m
+
+    return _run
+
+
+@pytest.fixture
+def main_branch(monkeypatch):
+    monkeypatch.setattr("fate.run.current_branch", lambda _: "main")
+
+
+def test_uv_exports_requirements(repo, mock_subprocess, main_branch):
+    root = Path(repo.working_tree_dir)
+    _commit_files(
+        repo,
+        root,
+        {"prek.toml": PREK_WITH_UV_EXPORT, "requirements.txt": "gitpython\n"},
+    )
+    entry = _write_task_faterc(root, uv=True)
+    run_repo(entry, only={"uv"})
+    cmds = _cmds(mock_subprocess)
+    assert UV_EXPORT_CMD in cmds
+    assert cmds.index(("uv", "sync", "--upgrade")) < cmds.index(UV_EXPORT_CMD)
+
+
+def test_uv_skips_export_without_requirements_file(repo, mock_subprocess, main_branch):
+    root = Path(repo.working_tree_dir)
+    _commit_files(repo, root, {"prek.toml": PREK_WITH_UV_EXPORT})
+    entry = _write_task_faterc(root, uv=True)
+    run_repo(entry, only={"uv"})
+    assert UV_EXPORT_CMD not in _cmds(mock_subprocess)
+
+
+def test_uv_skips_export_without_hook(repo, mock_subprocess, main_branch):
+    root = Path(repo.working_tree_dir)
+    _commit_files(
+        repo, root, {"prek.toml": PREK_BEFORE, "requirements.txt": "gitpython\n"}
+    )
+    entry = _write_task_faterc(root, uv=True)
+    run_repo(entry, only={"uv"})
+    assert UV_EXPORT_CMD not in _cmds(mock_subprocess)
+
+
+def test_uv_skips_export_without_prek_toml(repo, mock_subprocess, main_branch):
+    root = Path(repo.working_tree_dir)
+    _commit_files(repo, root, {"requirements.txt": "gitpython\n"})
+    entry = _write_task_faterc(root, uv=True)
+    run_repo(entry, only={"uv"})
+    assert UV_EXPORT_CMD not in _cmds(mock_subprocess)
+
+
+def test_uv_runs_before_prek(repo, mock_subprocess, main_branch):
+    root = Path(repo.working_tree_dir)
+    _commit_files(repo, root, {"prek.toml": PREK_BEFORE})
+    entry = _write_task_faterc(root, uv=True, prek=True)
+    run_repo(entry)
+    cmds = _cmds(mock_subprocess)
+    assert cmds.index(("uv", "sync", "--upgrade")) < cmds.index(("prek", "update"))
+
+
+def test_prek_update_runs_all_files_and_commits(repo, monkeypatch, main_branch):
+    root = Path(repo.working_tree_dir)
+    _commit_files(repo, root, {"prek.toml": PREK_BEFORE})
+    entry = _write_task_faterc(root, prek=True)
+    calls: list = []
+
+    def on_call(args):
+        if args[:2] == ["prek", "update"]:
+            (root / "prek.toml").write_text(PREK_AFTER)
+        return 0
+
+    monkeypatch.setattr("fate.run.subprocess.run", _fake_run(calls, on_call))
+    run_repo(entry, only={"prek"})
+    cmds = _cmds(calls)
+    assert ("prek", "run", "--all-files") in cmds
+    assert ("git", "commit", "-am", "ci: prek update") in cmds
+
+
+def test_prek_no_run_all_files_when_nothing_updated(repo, mock_subprocess, main_branch):
+    root = Path(repo.working_tree_dir)
+    _commit_files(repo, root, {"prek.toml": PREK_BEFORE})
+    entry = _write_task_faterc(root, prek=True)
+    run_repo(entry, only={"prek"})
+    assert ("prek", "run", "--all-files") not in _cmds(mock_subprocess)
+
+
+def test_prek_retries_after_auto_fixes(repo, monkeypatch, main_branch):
+    root = Path(repo.working_tree_dir)
+    _commit_files(repo, root, {"prek.toml": PREK_BEFORE})
+    entry = _write_task_faterc(root, prek=True)
+    calls: list = []
+    runs = []
+
+    def on_call(args):
+        if args[:2] == ["prek", "update"]:
+            (root / "prek.toml").write_text(PREK_AFTER)
+            return 0
+        if args[:2] == ["prek", "run"]:
+            runs.append(args)
+            if len(runs) == 1:
+                (root / "README").write_text("auto-fixed")
+                return 1
+        return 0
+
+    monkeypatch.setattr("fate.run.subprocess.run", _fake_run(calls, on_call))
+    run_repo(entry, only={"prek"})
+    assert len(runs) == 2
+    assert ("git", "commit", "-am", "ci: prek update") in _cmds(calls)
+
+
+def test_prek_failure_leaves_repo_alone(repo, monkeypatch, main_branch, capsys):
+    root = Path(repo.working_tree_dir)
+    _commit_files(repo, root, {"prek.toml": PREK_BEFORE})
+    entry = _write_task_faterc(root, prek=True)
+    calls: list = []
+    runs = []
+
+    def on_call(args):
+        if args[:2] == ["prek", "update"]:
+            (root / "prek.toml").write_text(PREK_AFTER)
+            return 0
+        if args[:2] == ["prek", "run"]:
+            runs.append(args)
+            return 1
+        return 0
+
+    monkeypatch.setattr("fate.run.subprocess.run", _fake_run(calls, on_call))
+    run_repo(entry, only={"prek"})
+    assert len(runs) == 1
+    assert not any("commit" in " ".join(c) for c in calls)
+    assert "manual intervention" in capsys.readouterr().out
+
+
+def test_prek_failure_blocks_push(repo_with_upstream, monkeypatch, main_branch):
+    repo = repo_with_upstream
+    root = Path(repo.working_tree_dir)
+    _commit_files(repo, root, {"prek.toml": PREK_BEFORE})
+    entry = _write_task_faterc(root, prek=True, push=True)
+    calls: list = []
+
+    def on_call(args):
+        if args[:2] == ["prek", "update"]:
+            (root / "prek.toml").write_text(PREK_AFTER)
+            return 0
+        return 1 if args[:2] == ["prek", "run"] else 0
+
+    monkeypatch.setattr("fate.run.subprocess.run", _fake_run(calls, on_call))
+    run_repo(entry, only={"prek", "push"})
+    assert ("git", "push") not in _cmds(calls)
+
+
+def test_prek_success_allows_push(repo_with_upstream, monkeypatch, main_branch):
+    repo = repo_with_upstream
+    root = Path(repo.working_tree_dir)
+    _commit_files(repo, root, {"prek.toml": PREK_BEFORE})
+    entry = _write_task_faterc(root, prek=True, push=True)
+    calls: list = []
+
+    def on_call(args):
+        if args[:2] == ["prek", "update"]:
+            (root / "prek.toml").write_text(PREK_AFTER)
+        return 0
+
+    monkeypatch.setattr("fate.run.subprocess.run", _fake_run(calls, on_call))
+    run_repo(entry, only={"prek", "push"})
+    assert ("git", "push") in _cmds(calls)
