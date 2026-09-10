@@ -69,11 +69,17 @@ def find_faterc(directory: Path) -> Path | None:
     return None
 
 
+def base_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.setdefault("PREK_QUIET", "1")
+    return env
+
+
 def venv_env(venv: str, repo_root: Path) -> dict[str, str]:
     venv_path = Path(venv).expanduser()
     if not venv_path.is_absolute():
         venv_path = repo_root / venv_path
-    env = os.environ.copy()
+    env = base_env()
     env["PATH"] = str(venv_path / "bin") + os.pathsep + env.get("PATH", "")
     env["UV_PROJECT_ENVIRONMENT"] = str(venv_path)
     return env
@@ -169,14 +175,23 @@ def run_repo(
     repo = git.Repo(git_root)
 
     branch = entry.branch or current_branch(repo)
-    env = venv_env(entry.venv, git_root) if entry.venv else os.environ.copy()
+    env = venv_env(entry.venv, git_root) if entry.venv else base_env()
 
     def active(name: str) -> bool:
         if name not in tasks:
             return False
         if entry.faterc is None:
             return name in {"pull", "push"}
-        return entry.actions.get(name, {}).get("enabled", False)
+        cfg = entry.actions.get(name, {})
+        if cfg.get("enabled") is False:
+            print(
+                colorize(
+                    "1;31",
+                    f"{git_root}: skipping {name} "
+                    f"(enabled = false in {entry.faterc.name})",
+                )
+            )
+        return cfg.get("enabled", False)
 
     pull_active = active("pull")
     uv_active = active("uv")
@@ -192,7 +207,7 @@ def run_repo(
                     f"{git_root}: Working directory is dirty, running git fetch only",
                 )
             )
-            subprocess.run(["git", "fetch"], cwd=git_root, check=True)
+            subprocess.run(["git", "fetch"], cwd=git_root, env=env, check=True)
         elif needs_branch:
             print(colorize("1;33", f"Skipping {git_root}: Working directory is dirty"))
         return
@@ -202,29 +217,30 @@ def run_repo(
     if pull_active and not needs_branch:
         # No branch-switching tasks active: update target branch without checkout.
         if orig == branch:
-            subprocess.run(["git", "pull"], cwd=git_root, check=True)
+            subprocess.run(["git", "pull"], cwd=git_root, env=env, check=True)
         else:
             # Fast-forward the local branch ref from origin without switching to it.
             result = subprocess.run(
                 ["git", "fetch", "origin", f"{branch}:{branch}"],
                 cwd=git_root,
+                env=env,
                 check=True,
             )
             if result.returncode != 0:
                 # Diverged or no upstream; fall back to plain fetch.
-                subprocess.run(["git", "fetch"], cwd=git_root, check=True)
+                subprocess.run(["git", "fetch"], cwd=git_root, env=env, check=True)
         return
 
     if not needs_branch:
         return
 
     if orig != branch:
-        subprocess.run(["git", "checkout", branch], cwd=git_root, check=True)
+        subprocess.run(["git", "checkout", branch], cwd=git_root, env=env, check=True)
 
     needs_attention = False
     try:
         if pull_active:
-            subprocess.run(["git", "pull"], cwd=git_root, check=True)
+            subprocess.run(["git", "pull"], cwd=git_root, env=env, check=True)
 
         uv_cfg = entry.actions.get("uv", {})
         if uv_active:
@@ -270,7 +286,9 @@ def run_repo(
             if needs_attention:
                 print(colorize("1;33", f"{git_root}: staying on branch {branch}"))
             else:
-                subprocess.run(["git", "checkout", orig], cwd=git_root, check=True)
+                subprocess.run(
+                    ["git", "checkout", orig], cwd=git_root, env=env, check=True
+                )
 
 
 @functools.cache

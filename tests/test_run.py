@@ -9,6 +9,7 @@ from fate.run import (
     RepoEntry,
     _find_faterc_files,
     _find_git_repos,
+    base_env,
     find_faterc,
     iter_all_repos,
     iter_repos,
@@ -41,7 +42,22 @@ def test_find_faterc_none(tmp_path):
     assert find_faterc(tmp_path) is None
 
 
-# --- venv_env ---
+# --- base_env / venv_env ---
+
+
+def test_base_env_sets_prek_quiet(monkeypatch):
+    monkeypatch.delenv("PREK_QUIET", raising=False)
+    assert base_env()["PREK_QUIET"] == "1"
+
+
+def test_base_env_respects_existing_prek_quiet(monkeypatch):
+    monkeypatch.setenv("PREK_QUIET", "0")
+    assert base_env()["PREK_QUIET"] == "0"
+
+
+def test_venv_env_sets_prek_quiet(tmp_path, monkeypatch):
+    monkeypatch.delenv("PREK_QUIET", raising=False)
+    assert venv_env(str(tmp_path), tmp_path)["PREK_QUIET"] == "1"
 
 
 def test_venv_env_absolute(tmp_path):
@@ -190,6 +206,41 @@ def test_faterc_disabled_not_run_even_if_requested(repo, mock_subprocess, monkey
     monkeypatch.setattr("fate.run.current_branch", lambda _: "main")
     run_repo(entry, {"push"})
     assert not any("push" in " ".join(c) for c in mock_subprocess)
+
+
+def _write_disabled_faterc(path: Path, *disabled: str) -> RepoEntry:
+    lines = ['[config]\nbranch = "main"\n\n[actions]\n']
+    lines += [f"{name} = {{ enabled = false }}\n" for name in disabled]
+    faterc = path / ".faterc"
+    faterc.write_text("".join(lines))
+    return RepoEntry.from_faterc(path, faterc)
+
+
+def test_explicitly_disabled_task_prints_note(repo, mock_subprocess, capsys):
+    root = Path(repo.working_tree_dir)
+    entry = _write_disabled_faterc(root, "prek", "push")
+    run_repo(entry, ALL_TASKS)
+    out = capsys.readouterr().out
+    assert "skipping prek" in out
+    assert "skipping push" in out
+    assert ".faterc" in out
+
+
+def test_task_absent_from_faterc_prints_no_note(
+    repo, mock_subprocess, monkeypatch, capsys
+):
+    root = Path(repo.working_tree_dir)
+    entry = _write_faterc(root, pull=True)
+    monkeypatch.setattr("fate.run.current_branch", lambda _: "main")
+    run_repo(entry, ALL_TASKS)
+    assert "skipping" not in capsys.readouterr().out
+
+
+def test_unrequested_task_prints_no_note(repo, mock_subprocess, capsys):
+    root = Path(repo.working_tree_dir)
+    entry = _write_disabled_faterc(root, "prek")
+    run_repo(entry, {"push"})
+    assert "skipping" not in capsys.readouterr().out
 
 
 # -- smart pull (no branch switching when only pull is active) --

@@ -42,6 +42,10 @@ prek = {enabled = true, commit = true}
 push = {enabled = true, verify = true}
 ```
 
+An action written out with `enabled = false` gets a red note when `fate`
+skips it, so a deliberately switched-off action stays visible.
+Omit the action entirely to silence that.
+
 ### fate seek (or fate s)
 
 Search for Git repositories that could benefit from `fate init`
@@ -67,6 +71,10 @@ run in the order listed:
 - `push`: runs `git push` if there is a configured remote.
   If the `verify` option is turned off, adds `--no-verify`.
   Only `fate push` ever runs this task; `fate run` and `fate gamble` skip it.
+
+Every subprocess runs with `PREK_QUIET=1` so that `prek`, whether invoked
+directly or from a git hook, only reports what actually needs attention.
+Set `PREK_QUIET` yourself to override it.
 
 ### fate gamble (or fate g)
 
