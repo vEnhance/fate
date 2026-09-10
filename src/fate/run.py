@@ -20,7 +20,7 @@ from fate.prek import (
 )
 
 ALL_TASKS = frozenset({"pull", "uv", "prek", "push"})
-GAMBLE_TASKS = ALL_TASKS - {"push"}
+NO_PUSH_TASKS = ALL_TASKS - {"push"}
 
 
 @dataclass

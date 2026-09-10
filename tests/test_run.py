@@ -5,7 +5,7 @@ import pytest
 
 from fate.run import (
     ALL_TASKS,
-    GAMBLE_TASKS,
+    NO_PUSH_TASKS,
     RepoEntry,
     _find_faterc_files,
     _find_git_repos,
@@ -165,11 +165,11 @@ def _cmds(calls: list) -> list[tuple]:
 # -- task filtering --
 
 
-def test_gamble_skips_push(repo, mock_subprocess, monkeypatch):
+def test_no_push_tasks_skips_push(repo, mock_subprocess, monkeypatch):
     root = Path(repo.working_tree_dir)
     entry = _write_faterc(root, pull=True, push=True)
     monkeypatch.setattr("fate.run.current_branch", lambda _: "main")
-    run_repo(entry, GAMBLE_TASKS)
+    run_repo(entry, NO_PUSH_TASKS)
     cmd_strs = [" ".join(c) for c in mock_subprocess]
     assert any("pull" in s for s in cmd_strs)
     assert not any("push" in s for s in cmd_strs)
@@ -451,10 +451,10 @@ def test_unconfigured_no_tasks_does_nothing(repo, mock_subprocess, monkeypatch):
     assert not mock_subprocess
 
 
-def test_unconfigured_gamble_only_pulls(repo, mock_subprocess, monkeypatch):
+def test_unconfigured_no_push_tasks_only_pulls(repo, mock_subprocess, monkeypatch):
     root = Path(repo.working_tree_dir)
     monkeypatch.setattr("fate.run.current_branch", lambda _: "main")
-    run_repo(RepoEntry.unconfigured(root), GAMBLE_TASKS)
+    run_repo(RepoEntry.unconfigured(root), NO_PUSH_TASKS)
     cmd_strs = [" ".join(c) for c in mock_subprocess]
     assert any("pull" in s for s in cmd_strs)
     assert not any("push" in s for s in cmd_strs)

@@ -14,7 +14,7 @@ import tomlkit.items
 from fate.color import colorize
 from fate.git_utils import find_git_root, has_upstream, print_repo_status
 from fate.run import (
-    GAMBLE_TASKS,
+    NO_PUSH_TASKS,
     RepoEntry,
     find_faterc,
     iter_all_repos,
@@ -96,11 +96,11 @@ def cmd_run(args: argparse.Namespace) -> None:
         print(f"Error: No .faterc or faterc found in {git_root}", file=sys.stderr)
         sys.exit(1)
 
-    run_repo(RepoEntry.from_faterc(git_root, faterc), GAMBLE_TASKS)
+    run_repo(RepoEntry.from_faterc(git_root, faterc), NO_PUSH_TASKS)
 
 
 def cmd_gamble(args: argparse.Namespace) -> None:
-    _run_all_from_args(args, GAMBLE_TASKS)
+    _run_all_from_args(args, NO_PUSH_TASKS)
 
 
 def cmd_list(args: argparse.Namespace) -> None:
