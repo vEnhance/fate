@@ -13,7 +13,14 @@ import tomlkit.items
 
 from fate.color import colorize
 from fate.git_utils import find_git_root, has_upstream, print_repo_status
-from fate.run import RepoEntry, find_faterc, iter_all_repos, iter_repos, run_repo
+from fate.run import (
+    RepoEntry,
+    find_faterc,
+    iter_all_repos,
+    iter_repos,
+    iter_uninitialized_repos,
+    run_repo,
+)
 
 
 def _parse_duration(s: str) -> float:
@@ -135,14 +142,14 @@ def cmd_multirun(args: argparse.Namespace) -> None:
 
 
 def cmd_init(args: argparse.Namespace) -> None:
-    cwd = Path.cwd()
+    cwd = Path(args.directory).resolve() if args.directory else Path.cwd()
 
     if not (cwd / ".git").exists():
-        print("Error: not at the root of a git repository", file=sys.stderr)
+        print(f"Error: {cwd} is not the root of a git repository", file=sys.stderr)
         sys.exit(1)
 
     if find_faterc(cwd) is not None:
-        print("Error: .faterc or faterc already exists", file=sys.stderr)
+        print(f"Error: .faterc or faterc already exists in {cwd}", file=sys.stderr)
         sys.exit(1)
     faterc = cwd / ("faterc" if args.visible else ".faterc")
 
@@ -189,6 +196,25 @@ def cmd_init(args: argparse.Namespace) -> None:
 
     faterc.write_text(tomlkit.dumps(doc))
     print(f"created {faterc}")
+
+
+def cmd_seek(args: argparse.Namespace) -> None:
+    target = Path(args.directory).resolve() if args.directory else Path.cwd()
+    found = iter_uninitialized_repos(
+        target, depth=args.depth, unrestricted=args.unrestricted
+    )
+    if not found:
+        print(f"Nothing to initialize in {target}")
+        return
+
+    for repo, markers in found:
+        try:
+            label = str(repo.relative_to(target))
+        except ValueError:
+            label = str(repo)
+        print(f"{colorize('1;34', label)} {colorize('37', ', '.join(markers))}")
+    print()
+    print(f"Run {colorize('1;32', 'fate init DIRECTORY')} on any of these.")
 
 
 def _add_multi_args(p: argparse.ArgumentParser) -> None:
@@ -269,6 +295,7 @@ def main() -> None:
     p_init = sub.add_parser(
         "init", aliases=["i"], help="Initialize .faterc in the current directory."
     )
+    p_init.add_argument("directory", nargs="?", default=None)
     p_init.add_argument(
         "--visible",
         action="store_true",
@@ -330,6 +357,28 @@ def main() -> None:
         help="Skip these tasks, comma-separated. Repeatable.",
     )
     p_multirun.set_defaults(func=cmd_multirun)
+
+    p_seek = sub.add_parser(
+        "seek",
+        aliases=["s"],
+        help="Find git repositories that look like they want a .faterc.",
+    )
+    p_seek.add_argument("directory", nargs="?", default=None)
+    p_seek.add_argument(
+        "--depth",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Search at most N directories deep (default: unlimited)",
+    )
+    p_seek.add_argument(
+        "-u",
+        "--unrestricted",
+        action="store_true",
+        default=False,
+        help="Also search inside hidden directories",
+    )
+    p_seek.set_defaults(func=cmd_seek)
 
     args = parser.parse_args()
     args.func(args)

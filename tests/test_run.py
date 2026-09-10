@@ -10,6 +10,7 @@ from fate.run import (
     find_faterc,
     iter_all_repos,
     iter_repos,
+    iter_uninitialized_repos,
     run_repo,
     venv_env,
 )
@@ -678,3 +679,94 @@ def test_prek_success_allows_push(repo_with_upstream, monkeypatch, main_branch):
     monkeypatch.setattr("fate.run.subprocess.run", _fake_run(calls, on_call))
     run_repo(entry, only={"prek", "push"})
     assert ("git", "push") in _cmds(calls)
+
+
+# --- iter_uninitialized_repos ---
+
+
+def _make_repo(path: Path, *markers: str) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    (path / ".git").mkdir()
+    for name in markers:
+        (path / name).write_text("")
+    return path
+
+
+def test_seek_empty(tmp_path):
+    assert iter_uninitialized_repos(tmp_path) == []
+
+
+def test_seek_finds_uv_lock(tmp_path):
+    _make_repo(tmp_path / "a", "uv.lock")
+    assert iter_uninitialized_repos(tmp_path) == [(tmp_path / "a", ["uv.lock"])]
+
+
+def test_seek_finds_prek_toml(tmp_path):
+    _make_repo(tmp_path / "a", "prek.toml")
+    assert iter_uninitialized_repos(tmp_path) == [(tmp_path / "a", ["prek.toml"])]
+
+
+def test_seek_lists_both_markers(tmp_path):
+    _make_repo(tmp_path / "a", "prek.toml", "uv.lock")
+    assert iter_uninitialized_repos(tmp_path) == [
+        (tmp_path / "a", ["uv.lock", "prek.toml"])
+    ]
+
+
+def test_seek_skips_configured_repo(tmp_path):
+    a = _make_repo(tmp_path / "a", "uv.lock")
+    (a / ".faterc").write_text('[config]\nbranch = "main"\n\n[actions]\n')
+    assert iter_uninitialized_repos(tmp_path) == []
+
+
+def test_seek_skips_visible_faterc_repo(tmp_path):
+    a = _make_repo(tmp_path / "a", "uv.lock")
+    (a / "faterc").write_text('[config]\nbranch = "main"\n\n[actions]\n')
+    assert iter_uninitialized_repos(tmp_path) == []
+
+
+def test_seek_skips_repo_without_markers(tmp_path):
+    _make_repo(tmp_path / "a")
+    assert iter_uninitialized_repos(tmp_path) == []
+
+
+def test_seek_ignores_marker_outside_git_repo(tmp_path):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "uv.lock").write_text("")
+    assert iter_uninitialized_repos(tmp_path) == []
+
+
+def test_seek_ignores_marker_below_repo_root(tmp_path):
+    """A uv.lock in a vendored subdirectory is not something fate would act on."""
+    a = _make_repo(tmp_path / "a")
+    vendored = a / ".venv" / "lib" / "pkg"
+    vendored.mkdir(parents=True)
+    (vendored / "uv.lock").write_text("")
+    assert iter_uninitialized_repos(tmp_path) == []
+
+
+def test_seek_ignores_nested_repo(tmp_path):
+    a = _make_repo(tmp_path / "a", "uv.lock")
+    _make_repo(a / "vendor" / "lib", "prek.toml")
+    assert iter_uninitialized_repos(tmp_path) == [(a, ["uv.lock"])]
+
+
+def test_seek_includes_target_itself(tmp_path):
+    _make_repo(tmp_path, "uv.lock")
+    assert iter_uninitialized_repos(tmp_path) == [(tmp_path, ["uv.lock"])]
+
+
+def test_seek_respects_depth(tmp_path):
+    _make_repo(tmp_path / "one" / "two", "uv.lock")
+    assert iter_uninitialized_repos(tmp_path, depth=1) == []
+    assert iter_uninitialized_repos(tmp_path) == [
+        (tmp_path / "one" / "two", ["uv.lock"])
+    ]
+
+
+def test_seek_skips_hidden_directories_by_default(tmp_path):
+    _make_repo(tmp_path / ".cache" / "a", "uv.lock")
+    assert iter_uninitialized_repos(tmp_path) == []
+    assert iter_uninitialized_repos(tmp_path, unrestricted=True) == [
+        (tmp_path / ".cache" / "a", ["uv.lock"])
+    ]

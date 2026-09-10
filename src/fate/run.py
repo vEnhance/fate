@@ -391,3 +391,28 @@ def iter_all_repos(
         configured.get(repo, RepoEntry.unconfigured(repo))
         for repo in _find_git_repos(target, depth=depth, unrestricted=unrestricted)
     ]
+
+
+INIT_MARKERS = ("uv.lock", "prek.toml")
+
+
+def iter_uninitialized_repos(
+    target: Path, depth: int | None = None, unrestricted: bool = False
+) -> list[tuple[Path, list[str]]]:
+    """Return (repo root, markers) for git repos with no faterc but with uv/prek set up.
+
+    Without a faterc, `fate multirun --all` can only pull and push such a repo,
+    so these are exactly the repos where `fate init` would unlock something.
+    """
+    configured = {
+        entry.path
+        for entry in iter_repos(target, depth=depth, unrestricted=unrestricted)
+    }
+    found = []
+    for repo in _find_git_repos(target, depth=depth, unrestricted=unrestricted):
+        if repo in configured:
+            continue
+        markers = [name for name in INIT_MARKERS if (repo / name).exists()]
+        if markers:
+            found.append((repo, markers))
+    return found

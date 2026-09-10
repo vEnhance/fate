@@ -25,7 +25,8 @@ See the argparse help for full options.
 For every directory you want to use with `fate`,
 you need to create a `.faterc` or `faterc` (the latter takes precedence)
 in the root of that Git repository.
-You can do this by running `fate init`.
+You can do this by running `fate init`
+(optionally with a directory argument, defaulting to the current one).
 
 This is a TOML 1.1 file that specifies which actions `fate` performs
 when run on that repository, and looks something like this:
@@ -40,6 +41,21 @@ pull = {enabled = true}
 uv = {enabled = true, commit = true}
 prek = {enabled = true, commit = true}
 push = {enabled = true, verify = true}
+```
+
+### fate seek (or fate s)
+
+Looks for Git repositories that ought to have a `.faterc` but don't:
+that is, repositories whose root has a `uv.lock` or `prek.toml`.
+Without a `.faterc`, `fate multirun --all` can only `pull` and `push` such a
+repository, so these are exactly the ones where `fate init` unlocks something.
+
+It searches to any depth by default (use `--depth N` to limit it),
+skips hidden directories unless you pass `-u`/`--unrestricted`,
+and makes no network queries.
+
+```bash
+fate seek ~
 ```
 
 ### fate run (or fate r)
