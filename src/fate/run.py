@@ -184,13 +184,7 @@ def run_repo(
             return name in {"pull", "push"}
         cfg = entry.actions.get(name, {})
         if cfg.get("enabled") is False:
-            print(
-                colorize(
-                    "1;31",
-                    f"{git_root}: skipping {name} "
-                    f"(enabled = false in {entry.faterc.name})",
-                )
-            )
+            print(colorize("0;35", f"- skipping {name} (enabled = false)"))
         return cfg.get("enabled", False)
 
     pull_active = active("pull")
@@ -201,15 +195,10 @@ def run_repo(
 
     if is_dirty(repo):
         if pull_active:
-            print(
-                colorize(
-                    "1;33",
-                    f"{git_root}: Working directory is dirty, running git fetch only",
-                )
-            )
+            print(colorize("1;33", "Working dir is dirty, running git fetch only"))
             subprocess.run(["git", "fetch"], cwd=git_root, env=env, check=True)
         elif needs_branch:
-            print(colorize("1;33", f"Skipping {git_root}: Working directory is dirty"))
+            print(colorize("1;33", "Skipping dirty working directory"))
         return
 
     orig = current_branch(repo)

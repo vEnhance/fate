@@ -223,7 +223,6 @@ def test_explicitly_disabled_task_prints_note(repo, mock_subprocess, capsys):
     out = capsys.readouterr().out
     assert "skipping prek" in out
     assert "skipping push" in out
-    assert ".faterc" in out
 
 
 def test_task_absent_from_faterc_prints_no_note(
