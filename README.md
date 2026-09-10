@@ -1,6 +1,6 @@
 # fate
 
-_Pull makes happy!_
+*Pull makes happy!*
 
 `fate` is a Python program that helps `git pull`
 a bunch of Git repositories in your home directory or similar.
@@ -70,28 +70,26 @@ run in the order listed:
   Attempts autofixes, but this can fail.
 - `push`: runs `git push` if there is a configured remote.
   If the `verify` option is turned off, adds `--no-verify`.
+  Only `fate push` ever runs this task; `fate run` and `fate gamble` skip it.
 
 Every subprocess runs with `PREK_QUIET=1` so that `prek`, whether invoked
 directly or from a git hook, only reports what actually needs attention.
 Set `PREK_QUIET` yourself to override it.
 
-### fate multirun (or fate m)
+### fate gamble (or fate g)
 
 This recursively runs `fate run` on every directory under the specified one
 which has a `.faterc` file.
+Like `fate run`, it never pushes; only `fate push` does that.
 
-The following options can be used for multirun mode:
-
-- By default `fate` runs all enabled tasks; but you can also use `-o`/`--only`
-  or `-e`/`--exclude` to restrict the list.
-  Note that `fate` will **never** run a task not actually enabled in `.faterc`.
+The following options can be used:
 
 - You can add a delay between repositories with `-d`/`--delay`
   (e.g. `1s`, `500ms`, `2m`, or just `5` for 5 seconds),
   to throttle requests.
 
 - Pass `-a`/`--all` to include discovered Git repositories that don't have `.faterc`,
-  allowing just `pull` and `push` on them.
+  allowing just `pull` on them (and `push`, for `fate push`).
 
 - Hidden directories are not searched by default
   (since `~/.cache` often has repositories, for example).
@@ -100,6 +98,8 @@ The following options can be used for multirun mode:
 - By default, only repositories directly inside the target directory are found.
   Use `-r`/`--recursive` to search to any depth, or `--depth N` to limit to N levels.
   (`-r` and `--depth` are mutually exclusive.)
+
+The same options work for `fate ls`, `fate pull`, and `fate push`.
 
 We recommend installing [fd](https://github.com/sharkdp/fd)
 for much faster search;
@@ -110,13 +110,11 @@ for much faster search;
 Shows the status of each repository without running any tasks.
 (It doesn't make any network queries, so it's the fastest.)
 
-### Shortcuts for fate multirun
+### Other multi-repository commands
 
-`fate ls` is actually just `fate multirun` with an empty `--only` list.
-We also have the following:
-
-- **fate pull**: equivalent to `fate multirun --only pull`
-- **fate gamble (or fate g)**: equivalent to `fate multirun --exclude push`.
-- **fate push**: equivalent to `fate multirun --only push`
+- **fate pull**: runs only the `pull` task on every repository.
+- **fate push**: runs only the `push` task on every repository.
+  This is the *only* command that pushes:
+  neither `fate run` nor `fate gamble` can, no matter what `.faterc` says.
 
 [fct]: https://puzzmon.world/rounds/fates_thread_casino

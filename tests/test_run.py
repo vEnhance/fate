@@ -4,6 +4,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from fate.run import (
+    ALL_TASKS,
+    NO_PUSH_TASKS,
     RepoEntry,
     _find_faterc_files,
     _find_git_repos,
@@ -179,30 +181,30 @@ def _cmds(calls: list) -> list[tuple]:
 # -- task filtering --
 
 
-def test_exclude_skips_task(repo, mock_subprocess, monkeypatch):
+def test_no_push_tasks_skips_push(repo, mock_subprocess, monkeypatch):
     root = Path(repo.working_tree_dir)
     entry = _write_faterc(root, pull=True, push=True)
     monkeypatch.setattr("fate.run.current_branch", lambda _: "main")
-    run_repo(entry, exclude={"push"})
+    run_repo(entry, NO_PUSH_TASKS)
     cmd_strs = [" ".join(c) for c in mock_subprocess]
     assert any("pull" in s for s in cmd_strs)
     assert not any("push" in s for s in cmd_strs)
 
 
-def test_only_restricts_tasks(repo, mock_subprocess, monkeypatch):
+def test_tasks_restrict_what_runs(repo, mock_subprocess, monkeypatch):
     root = Path(repo.working_tree_dir)
     entry = _write_faterc(root, pull=True, push=True)
     monkeypatch.setattr("fate.run.current_branch", lambda _: "main")
-    run_repo(entry, only={"pull"})
+    run_repo(entry, {"pull"})
     assert not any("push" in " ".join(c) for c in mock_subprocess)
 
 
-def test_faterc_disabled_not_run_even_if_in_only(repo, mock_subprocess, monkeypatch):
-    """A task disabled in faterc must never run, even if explicitly listed in only."""
+def test_faterc_disabled_not_run_even_if_requested(repo, mock_subprocess, monkeypatch):
+    """A task disabled in faterc must never run, even if explicitly requested."""
     root = Path(repo.working_tree_dir)
     entry = _write_faterc(root)  # nothing enabled
     monkeypatch.setattr("fate.run.current_branch", lambda _: "main")
-    run_repo(entry, only={"push"})
+    run_repo(entry, {"push"})
     assert not any("push" in " ".join(c) for c in mock_subprocess)
 
 
@@ -217,7 +219,7 @@ def _write_disabled_faterc(path: Path, *disabled: str) -> RepoEntry:
 def test_explicitly_disabled_task_prints_note(repo, mock_subprocess, capsys):
     root = Path(repo.working_tree_dir)
     entry = _write_disabled_faterc(root, "prek", "push")
-    run_repo(entry)
+    run_repo(entry, ALL_TASKS)
     out = capsys.readouterr().out
     assert "skipping prek" in out
     assert "skipping push" in out
@@ -230,17 +232,14 @@ def test_task_absent_from_faterc_prints_no_note(
     root = Path(repo.working_tree_dir)
     entry = _write_faterc(root, pull=True)
     monkeypatch.setattr("fate.run.current_branch", lambda _: "main")
-    run_repo(entry)
+    run_repo(entry, ALL_TASKS)
     assert "skipping" not in capsys.readouterr().out
 
 
-def test_filtered_out_task_prints_no_note(repo, mock_subprocess, capsys):
+def test_unrequested_task_prints_no_note(repo, mock_subprocess, capsys):
     root = Path(repo.working_tree_dir)
     entry = _write_disabled_faterc(root, "prek")
-    run_repo(entry, only={"push"})
-    assert "skipping" not in capsys.readouterr().out
-    entry = _write_disabled_faterc(root, "prek")
-    run_repo(entry, exclude={"prek"})
+    run_repo(entry, {"push"})
     assert "skipping" not in capsys.readouterr().out
 
 
@@ -251,7 +250,7 @@ def test_smart_pull_same_branch(repo, mock_subprocess, monkeypatch):
     root = Path(repo.working_tree_dir)
     entry = _write_faterc(root, pull=True)
     monkeypatch.setattr("fate.run.current_branch", lambda _: "main")
-    run_repo(entry, only={"pull"})
+    run_repo(entry, {"pull"})
     cmds = _cmds(mock_subprocess)
     assert ("git", "pull") in cmds
     assert not any("checkout" in " ".join(c) for c in mock_subprocess)
@@ -261,7 +260,7 @@ def test_smart_pull_different_branch(repo, mock_subprocess, monkeypatch):
     root = Path(repo.working_tree_dir)
     entry = _write_faterc(root, pull=True)
     monkeypatch.setattr("fate.run.current_branch", lambda _: "feature")
-    run_repo(entry, only={"pull"})
+    run_repo(entry, {"pull"})
     cmds = _cmds(mock_subprocess)
     assert ("git", "fetch", "origin", "main:main") in cmds
     assert not any("checkout" in " ".join(c) for c in mock_subprocess)
@@ -280,7 +279,7 @@ def test_smart_pull_fallback_on_failed_fetch(repo, monkeypatch):
         return m
 
     monkeypatch.setattr("fate.run.subprocess.run", _run)
-    run_repo(entry, only={"pull"})
+    run_repo(entry, {"pull"})
     cmds = _cmds(calls)
     assert ("git", "fetch", "origin", "main:main") in cmds
     assert ("git", "fetch") in cmds
@@ -292,7 +291,7 @@ def test_pull_with_other_tasks_switches_branch(repo, mock_subprocess, monkeypatc
     root = Path(repo.working_tree_dir)
     entry = _write_faterc(root, pull=True, push=True)
     monkeypatch.setattr("fate.run.current_branch", lambda _: "feature")
-    run_repo(entry)
+    run_repo(entry, ALL_TASKS)
     cmd_strs = [" ".join(c) for c in mock_subprocess]
     assert any("checkout" in s for s in cmd_strs)
     assert any("pull" in s for s in cmd_strs)
@@ -305,7 +304,7 @@ def test_dirty_with_pull_fetches(repo, mock_subprocess):
     root = Path(repo.working_tree_dir)
     entry = _write_faterc(root, pull=True)
     (root / "README").write_text("dirty")
-    run_repo(entry, only={"pull"})
+    run_repo(entry, {"pull"})
     cmds = _cmds(mock_subprocess)
     assert ("git", "fetch") in cmds
     assert ("git", "pull") not in cmds
@@ -315,7 +314,7 @@ def test_dirty_with_branch_task_skips(repo, mock_subprocess, capsys):
     root = Path(repo.working_tree_dir)
     entry = _write_faterc(root, push=True)
     (root / "README").write_text("dirty")
-    run_repo(entry, only={"push"})
+    run_repo(entry, {"push"})
     assert not mock_subprocess
     assert "dirty" in capsys.readouterr().out.lower()
 
@@ -324,7 +323,7 @@ def test_dirty_no_active_tasks_silent(repo, mock_subprocess, capsys):
     root = Path(repo.working_tree_dir)
     entry = _write_faterc(root)  # nothing enabled
     (root / "README").write_text("dirty")
-    run_repo(entry, only=set())
+    run_repo(entry, frozenset())
     assert not mock_subprocess
     out, err = capsys.readouterr()
     assert not out and not err
@@ -460,21 +459,21 @@ def test_iter_all_repos_mixed(tmp_path):
 def test_unconfigured_pull_runs(repo, mock_subprocess, monkeypatch):
     root = Path(repo.working_tree_dir)
     monkeypatch.setattr("fate.run.current_branch", lambda _: "main")
-    run_repo(RepoEntry.unconfigured(root), only={"pull"})
+    run_repo(RepoEntry.unconfigured(root), {"pull"})
     assert ("git", "pull") in _cmds(mock_subprocess)
 
 
 def test_unconfigured_uv_never_runs(repo, mock_subprocess, monkeypatch):
     root = Path(repo.working_tree_dir)
     monkeypatch.setattr("fate.run.current_branch", lambda _: "main")
-    run_repo(RepoEntry.unconfigured(root), only={"uv"})
+    run_repo(RepoEntry.unconfigured(root), {"uv"})
     assert not any("uv" in " ".join(c) for c in mock_subprocess)
 
 
 def test_unconfigured_prek_never_runs(repo, mock_subprocess, monkeypatch):
     root = Path(repo.working_tree_dir)
     monkeypatch.setattr("fate.run.current_branch", lambda _: "main")
-    run_repo(RepoEntry.unconfigured(root), only={"prek"})
+    run_repo(RepoEntry.unconfigured(root), {"prek"})
     assert not any("prek" in " ".join(c) for c in mock_subprocess)
 
 
@@ -483,7 +482,7 @@ def test_unconfigured_no_faterc_required(repo, mock_subprocess, monkeypatch):
     root = Path(repo.working_tree_dir)
     assert find_faterc(root) is None
     monkeypatch.setattr("fate.run.current_branch", lambda _: "main")
-    run_repo(RepoEntry.unconfigured(root), only={"pull"})  # must not raise
+    run_repo(RepoEntry.unconfigured(root), {"pull"})  # must not raise
 
 
 def test_unconfigured_uses_current_branch_no_checkout(
@@ -492,21 +491,21 @@ def test_unconfigured_uses_current_branch_no_checkout(
     """branch = current branch for unconfigured repos, so no checkout is needed."""
     root = Path(repo.working_tree_dir)
     monkeypatch.setattr("fate.run.current_branch", lambda _: "feature")
-    run_repo(RepoEntry.unconfigured(root), only={"pull"})
+    run_repo(RepoEntry.unconfigured(root), {"pull"})
     assert not any("checkout" in " ".join(c) for c in mock_subprocess)
 
 
-def test_unconfigured_only_empty_does_nothing(repo, mock_subprocess, monkeypatch):
+def test_unconfigured_no_tasks_does_nothing(repo, mock_subprocess, monkeypatch):
     root = Path(repo.working_tree_dir)
     monkeypatch.setattr("fate.run.current_branch", lambda _: "main")
-    run_repo(RepoEntry.unconfigured(root), only=set())
+    run_repo(RepoEntry.unconfigured(root), frozenset())
     assert not mock_subprocess
 
 
-def test_unconfigured_exclude_push_only_pulls(repo, mock_subprocess, monkeypatch):
+def test_unconfigured_no_push_tasks_only_pulls(repo, mock_subprocess, monkeypatch):
     root = Path(repo.working_tree_dir)
     monkeypatch.setattr("fate.run.current_branch", lambda _: "main")
-    run_repo(RepoEntry.unconfigured(root), exclude={"push"})
+    run_repo(RepoEntry.unconfigured(root), NO_PUSH_TASKS)
     cmd_strs = [" ".join(c) for c in mock_subprocess]
     assert any("pull" in s for s in cmd_strs)
     assert not any("push" in s for s in cmd_strs)
@@ -586,7 +585,7 @@ def test_uv_exports_requirements(repo, mock_subprocess, main_branch):
         {"prek.toml": PREK_WITH_UV_EXPORT, "requirements.txt": "gitpython\n"},
     )
     entry = _write_task_faterc(root, uv=True)
-    run_repo(entry, only={"uv"})
+    run_repo(entry, {"uv"})
     cmds = _cmds(mock_subprocess)
     assert UV_EXPORT_CMD in cmds
     assert cmds.index(("uv", "sync", "--upgrade")) < cmds.index(UV_EXPORT_CMD)
@@ -596,7 +595,7 @@ def test_uv_skips_export_without_requirements_file(repo, mock_subprocess, main_b
     root = Path(repo.working_tree_dir)
     _commit_files(repo, root, {"prek.toml": PREK_WITH_UV_EXPORT})
     entry = _write_task_faterc(root, uv=True)
-    run_repo(entry, only={"uv"})
+    run_repo(entry, {"uv"})
     assert UV_EXPORT_CMD not in _cmds(mock_subprocess)
 
 
@@ -606,7 +605,7 @@ def test_uv_skips_export_without_hook(repo, mock_subprocess, main_branch):
         repo, root, {"prek.toml": PREK_BEFORE, "requirements.txt": "gitpython\n"}
     )
     entry = _write_task_faterc(root, uv=True)
-    run_repo(entry, only={"uv"})
+    run_repo(entry, {"uv"})
     assert UV_EXPORT_CMD not in _cmds(mock_subprocess)
 
 
@@ -614,7 +613,7 @@ def test_uv_skips_export_without_prek_toml(repo, mock_subprocess, main_branch):
     root = Path(repo.working_tree_dir)
     _commit_files(repo, root, {"requirements.txt": "gitpython\n"})
     entry = _write_task_faterc(root, uv=True)
-    run_repo(entry, only={"uv"})
+    run_repo(entry, {"uv"})
     assert UV_EXPORT_CMD not in _cmds(mock_subprocess)
 
 
@@ -622,7 +621,7 @@ def test_uv_runs_before_prek(repo, mock_subprocess, main_branch):
     root = Path(repo.working_tree_dir)
     _commit_files(repo, root, {"prek.toml": PREK_BEFORE})
     entry = _write_task_faterc(root, uv=True, prek=True)
-    run_repo(entry)
+    run_repo(entry, ALL_TASKS)
     cmds = _cmds(mock_subprocess)
     assert cmds.index(("uv", "sync", "--upgrade")) < cmds.index(("prek", "update"))
 
@@ -639,7 +638,7 @@ def test_prek_update_runs_all_files_and_commits(repo, monkeypatch, main_branch):
         return 0
 
     monkeypatch.setattr("fate.run.subprocess.run", _fake_run(calls, on_call))
-    run_repo(entry, only={"prek"})
+    run_repo(entry, {"prek"})
     cmds = _cmds(calls)
     assert ("prek", "run", "--all-files") in cmds
     assert ("git", "commit", "-am", "ci: prek update") in cmds
@@ -649,7 +648,7 @@ def test_prek_no_run_all_files_when_nothing_updated(repo, mock_subprocess, main_
     root = Path(repo.working_tree_dir)
     _commit_files(repo, root, {"prek.toml": PREK_BEFORE})
     entry = _write_task_faterc(root, prek=True)
-    run_repo(entry, only={"prek"})
+    run_repo(entry, {"prek"})
     assert ("prek", "run", "--all-files") not in _cmds(mock_subprocess)
 
 
@@ -672,7 +671,7 @@ def test_prek_retries_after_auto_fixes(repo, monkeypatch, main_branch):
         return 0
 
     monkeypatch.setattr("fate.run.subprocess.run", _fake_run(calls, on_call))
-    run_repo(entry, only={"prek"})
+    run_repo(entry, {"prek"})
     assert len(runs) == 2
     assert ("git", "commit", "-am", "ci: prek update") in _cmds(calls)
 
@@ -694,7 +693,7 @@ def test_prek_failure_leaves_repo_alone(repo, monkeypatch, main_branch, capsys):
         return 0
 
     monkeypatch.setattr("fate.run.subprocess.run", _fake_run(calls, on_call))
-    run_repo(entry, only={"prek"})
+    run_repo(entry, {"prek"})
     assert len(runs) == 1
     assert not any("commit" in " ".join(c) for c in calls)
     assert "manual intervention" in capsys.readouterr().out
@@ -714,7 +713,7 @@ def test_prek_failure_blocks_push(repo_with_upstream, monkeypatch, main_branch):
         return 1 if args[:2] == ["prek", "run"] else 0
 
     monkeypatch.setattr("fate.run.subprocess.run", _fake_run(calls, on_call))
-    run_repo(entry, only={"prek", "push"})
+    run_repo(entry, {"prek", "push"})
     assert ("git", "push") not in _cmds(calls)
 
 
@@ -731,7 +730,7 @@ def test_prek_success_allows_push(repo_with_upstream, monkeypatch, main_branch):
         return 0
 
     monkeypatch.setattr("fate.run.subprocess.run", _fake_run(calls, on_call))
-    run_repo(entry, only={"prek", "push"})
+    run_repo(entry, {"prek", "push"})
     assert ("git", "push") in _cmds(calls)
 
 

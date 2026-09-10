@@ -14,6 +14,7 @@ import tomlkit.items
 from fate.color import colorize
 from fate.git_utils import find_git_root, has_upstream, print_repo_status
 from fate.run import (
+    NO_PUSH_TASKS,
     RepoEntry,
     find_faterc,
     iter_all_repos,
@@ -37,29 +38,9 @@ def _parse_duration(s: str) -> float:
     return value * {"ms": 0.001, "s": 1, "m": 60, "h": 3600}[unit]
 
 
-VALID_TASKS = {"pull", "uv", "prek", "push"}
-
-
-def _parse_tasks(raw: list[str] | None) -> set[str] | None:
-    """Parse repeated/comma-separated --only / --exclude values."""
-    if raw is None:
-        return None
-    result: set[str] = set()
-    for item in raw:
-        for task in item.split(","):
-            task = task.strip()
-            if not task:
-                continue
-            if task not in VALID_TASKS:
-                print(f"Warning: unknown task {task!r}", file=sys.stderr)
-            result.add(task)
-    return result
-
-
 def _run_all(
     target: Path,
-    only: set[str] | None,
-    exclude: set[str],
+    tasks: frozenset[str] | set[str],
     delay: float = 0.0,
     blank_lines: bool = True,
     all_repos: bool = False,
@@ -92,7 +73,7 @@ def _run_all(
                 path_prefix = str(entry.path.parent) + "/"
             if not print_repo_status(entry.path, path_prefix=path_prefix):
                 continue
-            run_repo(entry, only=only, exclude=exclude, prek_rev_cache=prek_rev_cache)
+            run_repo(entry, tasks, prek_rev_cache=prek_rev_cache)
         except git.InvalidGitRepositoryError:
             print(
                 f"Warning: {entry.path}: not a valid git repository, skipping",
@@ -115,30 +96,23 @@ def cmd_run(args: argparse.Namespace) -> None:
         print(f"Error: No .faterc or faterc found in {git_root}", file=sys.stderr)
         sys.exit(1)
 
-    run_repo(RepoEntry.from_faterc(git_root, faterc))
+    run_repo(RepoEntry.from_faterc(git_root, faterc), NO_PUSH_TASKS)
 
 
 def cmd_gamble(args: argparse.Namespace) -> None:
-    exclude: set[str] = set() if args.push else {"push"}
-    _run_all_from_args(args, only=None, exclude=exclude)
+    _run_all_from_args(args, NO_PUSH_TASKS)
 
 
 def cmd_list(args: argparse.Namespace) -> None:
-    _run_all_from_args(args, only=set(), exclude=set(), blank_lines=False)
+    _run_all_from_args(args, frozenset(), blank_lines=False)
 
 
 def cmd_pull(args: argparse.Namespace) -> None:
-    _run_all_from_args(args, only={"pull"}, exclude=set())
+    _run_all_from_args(args, {"pull"})
 
 
 def cmd_push(args: argparse.Namespace) -> None:
-    _run_all_from_args(args, only={"push"}, exclude=set())
-
-
-def cmd_multirun(args: argparse.Namespace) -> None:
-    only = _parse_tasks(args.only)
-    exclude = _parse_tasks(args.exclude) or set()
-    _run_all_from_args(args, only=only, exclude=exclude)
+    _run_all_from_args(args, {"push"})
 
 
 def _venv_setting(directory: Path, active_venv: str | None) -> str | None:
@@ -275,15 +249,13 @@ def _add_multi_args(p: argparse.ArgumentParser) -> None:
 
 def _run_all_from_args(
     args: argparse.Namespace,
-    only: set[str] | None,
-    exclude: set[str],
+    tasks: frozenset[str] | set[str],
     blank_lines: bool = True,
 ) -> None:
     target = Path(args.directory).resolve() if args.directory else Path.cwd()
     _run_all(
         target,
-        only=only,
-        exclude=exclude,
+        tasks,
         delay=args.delay,
         blank_lines=blank_lines,
         all_repos=args.all,
@@ -319,7 +291,7 @@ def main() -> None:
     p_init.set_defaults(func=cmd_init)
 
     p_run = sub.add_parser(
-        "run", aliases=["r"], help="Run fate on a single repository."
+        "run", aliases=["r"], help="Run all tasks except push on a single repository."
     )
     p_run.add_argument("directory", nargs="?", default=None)
     p_run.set_defaults(func=cmd_run)
@@ -338,39 +310,11 @@ def main() -> None:
         "gamble", aliases=["g"], help="Run all tasks except push on all repositories."
     )
     _add_multi_args(p_gamble)
-    p_gamble.add_argument(
-        "--push",
-        action="store_true",
-        default=False,
-        help="Also run push (= multirun with no exclusions), legacy option",
-    )
     p_gamble.set_defaults(func=cmd_gamble)
 
     p_push = sub.add_parser("push", help="Run only the push task on all repositories.")
     _add_multi_args(p_push)
     p_push.set_defaults(func=cmd_push)
-
-    p_multirun = sub.add_parser(
-        "multirun",
-        aliases=["m"],
-        help="Run all repositories with optional task filters.",
-    )
-    _add_multi_args(p_multirun)
-    p_multirun.add_argument(
-        "-o",
-        "--only",
-        action="append",
-        metavar="TASKS",
-        help="Only run these tasks, comma-separated (e.g. pull,push). Repeatable.",
-    )
-    p_multirun.add_argument(
-        "-e",
-        "--exclude",
-        action="append",
-        metavar="TASKS",
-        help="Skip these tasks, comma-separated. Repeatable.",
-    )
-    p_multirun.set_defaults(func=cmd_multirun)
 
     p_seek = sub.add_parser(
         "seek",

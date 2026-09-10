@@ -19,6 +19,9 @@ from fate.prek import (
     uv_export_output,
 )
 
+ALL_TASKS = frozenset({"pull", "uv", "prek", "push"})
+NO_PUSH_TASKS = ALL_TASKS - {"push"}
+
 
 @dataclass
 class RepoEntry:
@@ -161,27 +164,21 @@ def prek_task(
 
 def run_repo(
     entry: RepoEntry,
-    only: set[str] | None = None,
-    exclude: set[str] | None = None,
+    tasks: frozenset[str] | set[str],
     prek_rev_cache: dict[str, str] | None = None,
 ) -> None:
-    """Run enabled actions on a single repo.
+    """Run the requested actions on a single repo, if enabled in its faterc.
 
-    only: if given, restrict to this set of task names (still gated by faterc for configured repos)
-    exclude: skip these task names
     Unconfigured repos (entry.faterc is None) only allow pull/push, targeting the current branch.
     """
     git_root = entry.path
     repo = git.Repo(git_root)
-    exclude = exclude or set()
 
     branch = entry.branch or current_branch(repo)
     env = venv_env(entry.venv, git_root) if entry.venv else base_env()
 
     def active(name: str) -> bool:
-        if only is not None and name not in only:
-            return False
-        if name in exclude:
+        if name not in tasks:
             return False
         if entry.faterc is None:
             return name in {"pull", "push"}
@@ -419,7 +416,7 @@ def iter_uninitialized_repos(
 ) -> list[tuple[Path, list[str]]]:
     """Return (repo root, markers) for git repos with no faterc but with uv/prek set up.
 
-    Without a faterc, `fate multirun --all` can only pull and push such a repo,
+    Without a faterc, `fate` can only pull and push such a repo,
     so these are exactly the repos where `fate init` would unlock something.
     """
     configured = {
