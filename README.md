@@ -42,6 +42,10 @@ prek = {enabled = true, commit = true}
 push = {enabled = true, verify = true}
 ```
 
+An action written out with `enabled = false` gets a red note when `fate`
+skips it, so a deliberately switched-off action stays visible.
+Omit the action entirely to silence that.
+
 ### fate seek (or fate s)
 
 Search for Git repositories that could benefit from `fate init`

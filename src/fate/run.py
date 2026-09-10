@@ -185,7 +185,16 @@ def run_repo(
             return False
         if entry.faterc is None:
             return name in {"pull", "push"}
-        return entry.actions.get(name, {}).get("enabled", False)
+        cfg = entry.actions.get(name, {})
+        if cfg.get("enabled") is False:
+            print(
+                colorize(
+                    "1;31",
+                    f"{git_root}: skipping {name} "
+                    f"(enabled = false in {entry.faterc.name})",
+                )
+            )
+        return cfg.get("enabled", False)
 
     pull_active = active("pull")
     uv_active = active("uv")

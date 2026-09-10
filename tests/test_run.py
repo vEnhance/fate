@@ -206,6 +206,44 @@ def test_faterc_disabled_not_run_even_if_in_only(repo, mock_subprocess, monkeypa
     assert not any("push" in " ".join(c) for c in mock_subprocess)
 
 
+def _write_disabled_faterc(path: Path, *disabled: str) -> RepoEntry:
+    lines = ['[config]\nbranch = "main"\n\n[actions]\n']
+    lines += [f"{name} = {{ enabled = false }}\n" for name in disabled]
+    faterc = path / ".faterc"
+    faterc.write_text("".join(lines))
+    return RepoEntry.from_faterc(path, faterc)
+
+
+def test_explicitly_disabled_task_prints_note(repo, mock_subprocess, capsys):
+    root = Path(repo.working_tree_dir)
+    entry = _write_disabled_faterc(root, "prek", "push")
+    run_repo(entry)
+    out = capsys.readouterr().out
+    assert "skipping prek" in out
+    assert "skipping push" in out
+    assert ".faterc" in out
+
+
+def test_task_absent_from_faterc_prints_no_note(
+    repo, mock_subprocess, monkeypatch, capsys
+):
+    root = Path(repo.working_tree_dir)
+    entry = _write_faterc(root, pull=True)
+    monkeypatch.setattr("fate.run.current_branch", lambda _: "main")
+    run_repo(entry)
+    assert "skipping" not in capsys.readouterr().out
+
+
+def test_filtered_out_task_prints_no_note(repo, mock_subprocess, capsys):
+    root = Path(repo.working_tree_dir)
+    entry = _write_disabled_faterc(root, "prek")
+    run_repo(entry, only={"push"})
+    assert "skipping" not in capsys.readouterr().out
+    entry = _write_disabled_faterc(root, "prek")
+    run_repo(entry, exclude={"prek"})
+    assert "skipping" not in capsys.readouterr().out
+
+
 # -- smart pull (no branch switching when only pull is active) --
 
 
