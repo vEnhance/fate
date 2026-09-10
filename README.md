@@ -25,8 +25,7 @@ See the argparse help for full options.
 For every directory you want to use with `fate`,
 you need to create a `.faterc` or `faterc` (the latter takes precedence)
 in the root of that Git repository.
-You can do this by running `fate init`
-(optionally with a directory argument, defaulting to the current one).
+You can do this by running `fate init`.
 
 This is a TOML 1.1 file that specifies which actions `fate` performs
 when run on that repository, and looks something like this:
